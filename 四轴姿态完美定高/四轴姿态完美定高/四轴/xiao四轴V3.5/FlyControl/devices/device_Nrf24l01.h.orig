@@ -1,0 +1,78 @@
+/*=============================================================================
+** 作者：侯玉鹏
+** 日期：2017/10/31
+** 版本：V1.0
+** 头文件
+=============================================================================*/
+
+#ifndef __NRF24L01_H__
+#define __NRF24L01_H__
+/*============================ INCLUDES ======================================*/
+#include "basetype.h"
+/*============================ MACROS ========================================*/
+#define MODEL_RX				1			//普通接收
+#define MODEL_TX				2			//普通发送
+#define MODEL_RX2				3			//接收模式2,用于双向传输
+#define MODEL_TX2				4			//发送模式2,用于双向传输
+
+#define RX_PLOAD_WIDTH  255  	
+#define TX_PLOAD_WIDTH  255  	
+#define TX_ADR_WIDTH    5 	 	
+#define RX_ADR_WIDTH    5   
+/*============================ TYPES =========================================*/
+
+/*============================ GLOBAL VARIABLES ==============================*/
+/*============================ STATIC VARIABLES ==============================*/
+
+/*============================ FUNCTION ======================================*/
+
+//初始化,model=1/2/3/4,ch为实用的通道号
+void ANO_NRF_Init(u8 model, u8 ch);	
+//发送数据包,用于model 2/4
+void ANO_NRF_TxPacket(u8 * tx_buf, u8 len);	
+//发送数据包,用于model 3
+void ANO_NRF_TxPacket_AP(u8 * tx_buf, u8 len);	
+//检查NRF模块是否正常工作
+u8 ANO_NRF_Check(void);
+//检查是否有通信事件
+u8 ANO_NRF_Check_Event(void);
+extern u8 NRF24L01_2_RXDATA[RX_PLOAD_WIDTH];//nrf24l01接收到的数据
+extern u8 NRF24L01_2_TXDATA[RX_PLOAD_WIDTH];//nrf24l01需要发送的数据
+extern u8 NRF_SSI,NRF_SSI_CNT;//NRF信号强度
+
+u8 ANO_NRF_Read_Reg(u8 reg);
+u8 ANO_NRF_Write_Reg(u8 reg, u8 value);
+u8 ANO_NRF_Write_Buf(u8 reg, u8 *pBuf, u8 uchars);
+u8 ANO_NRF_Read_Buf(u8 reg, u8 *pBuf, u8 uchars);
+//初始化,model=1/2/3/4,ch为实用的通道号
+extern void NRF_Init(u8 model, u8 ch);	
+//发送数据包,用于model 2/4
+extern void NRF_TxPacket(u8 * tx_buf, u8 len);	
+//发送数据包,用于model 3
+extern void NRF_TxPacket_AP(u8 * tx_buf, u8 len);	
+//检查NRF模块是否正常工作
+extern u8   NRF_Check(void);
+extern u8 ANO_NRF_Check_Event(void);
+	//检查是否有通信事件
+extern void NRF_Check_Event(void);
+extern u8 NRF_Connect(void);//1KHZ
+extern u8 NRF24L01_2_RXDATA[RX_PLOAD_WIDTH];//nrf24l01接收到的数据
+extern u8 NRF24L01_2_TXDATA[RX_PLOAD_WIDTH];//nrf24l01需要发送的数据
+extern u8 NRF_SSI,NRF_SSI_CNT;//NRF信号强度
+
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

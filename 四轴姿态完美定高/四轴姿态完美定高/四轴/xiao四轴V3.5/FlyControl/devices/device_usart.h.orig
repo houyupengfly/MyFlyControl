@@ -1,0 +1,134 @@
+#ifndef __USART_H
+#define __USART_H
+#include "stm32f10x.h"
+
+#define UPDATE_DATA_LEN			194
+
+#define NULL       					0
+
+#define USART1_CLK          RCC_APB2Periph_USART1
+#define USART1_GPIO_CLK     RCC_APB2Periph_GPIOA
+#define USART1_GPIO         GPIOA
+#define USART1_TxPin        GPIO_Pin_9
+#define USART1_RxPin        GPIO_Pin_10
+
+#define U1_SendMaxSize      20
+#define U1_RxMaxSize     		(UPDATE_DATA_LEN+6+5) //定义最大接收字节数
+#define U1_BAUD             9600
+
+typedef struct
+{
+  u8  TxBuf[U1_SendMaxSize];
+  u8  RxBuf[U1_RxMaxSize];
+  u16 RxCnt;
+  u16 RxNum;
+} Uart1_Typedef;
+
+extern Uart1_Typedef  Uart1_Infor;
+
+
+#define USART3_CLK          RCC_APB1Periph_USART3
+#define USART3_GPIO_CLK     RCC_APB2Periph_GPIOB
+#define USART3_GPIO         GPIOB
+#define USART3_TxPin        GPIO_Pin_10
+#define USART3_RxPin        GPIO_Pin_11
+
+#define U3_SendMaxSize      270
+#define U3_RxMaxSize     		100 //定义最大接收字节数
+#define U3_Rx_OK            1
+
+#define U3_BAUD              9600
+typedef struct
+{
+  u8  TxBuf[U3_SendMaxSize];
+  u8  RxBuf[U3_RxMaxSize];
+  u16 RxCnt;
+  u16 RxNum;
+  u8  RxState;
+  u8  GyroscopeRxState;    //王红彬   20160726
+} Uart3_Typedef;
+
+extern Uart3_Typedef Uart3_Infor;  //
+
+#define UART4_CLK          RCC_APB1Periph_UART4
+#define UART4_GPIO_CLK     RCC_APB2Periph_GPIOA
+#define UART4_GPIO         GPIOC
+#define UART4_TxPin        GPIO_Pin_10
+#define UART4_RxPin        GPIO_Pin_11
+
+#define U4_SendMaxSize        25
+#define U4_RxMaxSize     			25 //定义最大接收字节数
+#define U4_Rx_ing               0
+#define U4_Rx_OK                1
+#define U4_Tx_ing               0
+#define U4_Tx_OK                1
+#define U4_BAUD              9600
+typedef struct
+{
+  u8  TxBuf[U4_SendMaxSize];
+  u8  *TxPt;
+  u8  TxStat;
+  u8  TxCnt;
+  u8  TxNum;
+  u8  RxBuf[U4_RxMaxSize];
+  u16 RxCnt;
+  u16 RxNum;
+  u8  RxState;
+} Uart4_Typedef;
+
+extern Uart4_Typedef  Uart4_Infor;
+
+
+#define UART5_CLK          RCC_APB1Periph_UART5
+#define UART5_GPIO_CLK     (RCC_APB2Periph_GPIOC|RCC_APB2Periph_GPIOD)
+#define UART5_GPIO_Tx         GPIOC
+#define UART5_GPIO_Rx         GPIOD
+#define UART5_TxPin        GPIO_Pin_12
+#define UART5_RxPin        GPIO_Pin_2
+
+#define U5_SendMaxSize        35
+#define U5_RxMaxSize     			25 //定义最大接收字节数
+#define U5_Rx_ing               0
+#define U5_Rx_OK                1
+#define U5_Tx_ing               0
+#define U5_Tx_OK                1
+#define U5_BAUD              9600
+typedef struct
+{
+  u8  TxBuf[U5_SendMaxSize];
+  u8  RxBuf[U5_RxMaxSize];
+  u16 RxCnt;
+  u16 RxNum;
+} Uart5_Typedef;
+
+extern Uart5_Typedef  Uart5_Infor;
+
+extern uint8_t afterpulse_state;  //赵晓松20161013
+extern uint8_t HalfPowerFlag;   //赵晓松20160928
+extern uint8_t EnterChargeState;  //赵晓松20170227
+
+
+extern uint16_t rx_cmd_flag;
+#define RX_CMD_PWROFF_TIME      0x0001
+#define RX_CMD_FORM             0x0002
+#define RX_CMD_RGB_MODE					0x0004
+#define RX_CMD_SET							0x0008
+#define RX_CMD_SENSOR						0x0010
+
+
+void Uart1_Init(u32 baud);
+//void Uart2_Init(u32 baud);
+void Uart3_Init(u32 baud);
+void Uart4_Init(u32 baud);
+void Uart5_Init(u32 baud);
+
+void UART1SendByte(uint8_t dat);
+void Uart1_SendData(u8 *datapt,u8 bytes);
+//void Uart2_SendData(u8 *datapt,u16 bytes);
+void Uart3_SendData(u8 *datapt,u16 bytes);
+void Uart4_SendData(u8 *datapt,u8 bytes);
+void Uart5_SendData(u8 *datapt,u8 bytes);
+extern uint8_t BlanceVersion[4];
+#endif
+
+

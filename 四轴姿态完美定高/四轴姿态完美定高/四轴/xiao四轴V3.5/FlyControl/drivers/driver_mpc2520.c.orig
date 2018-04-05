@@ -1,0 +1,101 @@
+/*=============================================================================
+** 作者：侯玉鹏
+** 日期：2017/10/31
+** 版本：V1.0
+** 函数名: 
+** 函数功能：
+** 输入参数：
+** 输出 ：1  返回值：
+          2  改变的全局变量
+** 本函数调用的其它函数（版本号）：
+** 备注：
+** 修改日志： （作者，日期，修改内容及原因）
+==============================================================================*/
+
+/*============================ INCLUDES ======================================*/
+#include "driver_mpc2520.h"
+#include "device_mpc2520.h"
+#include "seedEstimated.h"
+#include "FlyControlDataStruct.h"
+#include <math.h>
+/*============================ MACROS ========================================*/
+
+/*============================ TYPES =========================================*/
+
+/*============================ GLOBAL VARIABLES ==============================*/
+
+extern FlyControlDataStruct g_FlyControlDataStruct;
+extern SINS NewSinsData;
+/*============================ STATIC VARIABLES ==============================*/
+u8 SPL06_001_Offset_Okay=0;
+u8 SPL06_001_Finished=0;
+float SPL06_001_Filter_P,SPL06_001_Filter_high;
+float temperature;
+float pressure;
+float SPL06_001_Offset=0;
+float True_Altitude=0;   //实际高度,单位:m
+float Tempbaro;
+/*============================ FUNCTION ======================================*/
+
+
+float user_spl0601_get()
+{
+	static uint16_t spl06_cnt=0;
+	spl06_cnt++;
+	if(spl06_cnt==1)
+	{
+		spl0601_get_raw_temp(); 
+		temperature = spl0601_get_temperature();
+		g_FlyControlDataStruct.AppBaroDataStruct.Temp = temperature;
+	}
+	else
+	{
+
+		spl0601_get_raw_pressure();
+		pressure = spl0601_get_pressure();
+		g_FlyControlDataStruct.AppBaroDataStruct.Pruess = pressure;
+		spl06_cnt=0;
+	}
+	return 0;
+	}
+
+
+
+
+float Get_Altitude_SPL06_001(float baroPress)
+{
+    float Tempbaro=(float)(baroPress/SPL06_001_Offset)*1.0;
+    True_Altitude = 4433000.0f * (1 - powf((float)(Tempbaro),0.190295f));
+    return True_Altitude;
+}
+
+
+u16 High_Okay_flag=0;
+float SPL06_001_Filter_P,SPL06_001_Filter_high;
+unsigned int SPL06_001_Cnt=0;
+void SPL06_001_StateMachine(void)
+{
+  user_spl0601_get();
+  if(SPL06_001_Cnt<=100)  SPL06_001_Cnt++;
+  if(SPL06_001_Cnt==99)
+  {
+    SPL06_001_Offset_Okay=1;
+    High_Okay_flag=1;
+    SPL06_001_Offset=pressure;
+    if(SPL06_001_Offset_Okay==1)//初始气压零点设置完毕
+   {
+    SPL06_001_Filter_P=pressure;
+    SPL06_001_Filter_high=Get_Altitude_SPL06_001(SPL06_001_Filter_P);
+   }
+    Strapdown_INS_Reset(&NewSinsData,0,SPL06_001_Filter_high,0);
+  }
+
+  if(SPL06_001_Offset_Okay==1)//初始气压零点设置完毕
+  {
+    SPL06_001_Filter_P=pressure;
+    SPL06_001_Filter_high=Get_Altitude_SPL06_001(SPL06_001_Filter_P);
+	g_FlyControlDataStruct.AppHightCtrl.BaroHight=SPL06_001_Filter_high;
+	g_FlyControlDataStruct.AppConfigDataStruct.BaroFlag = Baro_State_Ready;
+  }
+
+}
