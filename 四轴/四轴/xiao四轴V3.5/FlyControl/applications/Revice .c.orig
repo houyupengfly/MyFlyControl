@@ -1,0 +1,359 @@
+/**
+* @file     App_RC.c
+* @brief    遥控输入应用服务与目标计算
+* @version  V2.0
+* @author   HYP
+* @date     2017-4-27
+* @note
+*/
+/*============================ INCLUDES ======================================*/
+
+#include "device_Nrf24l01.h"
+#include "device_Bluetooth.h"
+#include "device_flow.h"
+
+#include "Revice.h"
+
+#include "FlyControlDataStruct.h"
+#include "Algorithm_math.h"
+#include "math.h"
+
+/*============================ MACROS ========================================*/
+
+#define HIGH_START  80
+#define angle_to_rad 57.29f
+#define PI 3.14f
+/*============================ TYPES =========================================*/
+
+
+
+/*============================ GLOBAL VARIABLES ==============================*/
+extern FlyControlDataStruct g_FlyControlDataStruct;
+extern u8 Flow_SSI,Flow_SSI_CNT,Flow_Err;
+extern u8 Bluet_SSI,Bluet_SSI_CNT;
+/*============================ STATIC VARIABLES ==============================*/
+u32 unlook,look,Calibrate_cnt=0;
+float Rc_Angle,Rc_Abs;
+u16 test_flag,set_flag;
+/*============================ IMPLEMENTATION ================================*/
+ /*=============================================================================
+ + 实现功能：
+ + 调用参数功能：
+==============================================================================*/
+void Call_RadioContrl(void)
+{
+    Nrf_Check_Event();//NRF
+    if(Nrf_Connect()==0)
+    {
+        Bluet_Connect();
+    }
+}
+ /*=============================================================================
+ + 实现功能：
+ + 调用参数功能：
+==============================================================================*/
+void No_Head(float *x,float *y,float angle)
+{
+    angle    = angle / angle_to_rad;				 //转向角度转弧度
+    Rc_Angle = asin( (*x)/Rc_Abs );                  //遥杆角度
+
+    //角度转换到-PI~0~PI
+    if((*x)<0 && (*y)<0)
+    {
+        Rc_Angle = -PI - Rc_Angle;
+    }
+    else if((*x)>0 && (*y)<0)
+    {
+        Rc_Angle = PI - Rc_Angle;
+    }
+    else if((*x)==0 && (*y)<0)
+    {
+        Rc_Angle = PI;
+    }
+    //无头控制输出
+    *x = Rc_Abs*sin(Rc_Angle+angle);
+    *y = Rc_Abs*cos(Rc_Angle+angle);
+}
+ /*=============================================================================
+ + 实现功能：
+ + 调用参数功能：
+==============================================================================*/
+void Call_RadioContrlTarget(float roll,float pitch,float yaw)
+{
+    s16 ftemp=0;
+
+    Rc_Abs = Q_rsqrt(roll*roll+ pitch*pitch);
+
+    if(g_FlyControlDataStruct.AppConfigDataStruct.No_Head_Mode)
+    {
+        No_Head(&roll,&pitch,-g_FlyControlDataStruct.App_AngleStruct.Yaw);
+    }
+
+    g_FlyControlDataStruct.AppRCTargetDataStruct.Roll	 = MAX_CTRL_ANGLE*( my_deathzoom((roll) ,50 )/400.0f );
+    g_FlyControlDataStruct.AppRCTargetDataStruct.Pitch   = MAX_CTRL_ANGLE*( my_deathzoom((-pitch) ,50 )/400.0f );
+
+
+    if(g_FlyControlDataStruct.AppConfigDataStruct.Thrlow!=1)
+    {
+        if(g_FlyControlDataStruct.AppConfigDataStruct.LockYaw !=1)
+        {
+            g_FlyControlDataStruct.AppConfigDataStruct.LockYaw= 1;
+            g_FlyControlDataStruct.AppRCTargetDataStruct.Yaw = g_FlyControlDataStruct.App_AngleStruct.Yaw;
+        }
+    }
+    else
+    {
+        g_FlyControlDataStruct.AppConfigDataStruct.LockYaw = 0;
+        g_FlyControlDataStruct.AppRCTargetDataStruct.Yaw   = g_FlyControlDataStruct.App_AngleStruct.Yaw;
+    }
+
+    if((  g_FlyControlDataStruct.AppRCTargetDataStruct.Yaw>-100)&&(  g_FlyControlDataStruct.AppRCTargetDataStruct.Yaw < 100))
+    {
+        ftemp=yaw;
+        g_FlyControlDataStruct.AppRCTargetDataStruct.Yaw += (ftemp / 200.0f)*0.5f;
+    }
+
+    //转[-180.0,+180.0]
+    if( g_FlyControlDataStruct.AppRCTargetDataStruct.Yaw >180.0f)  g_FlyControlDataStruct.AppRCTargetDataStruct.Yaw -= 360.0f;
+    else if( g_FlyControlDataStruct.AppRCTargetDataStruct.Yaw <-180.0f) g_FlyControlDataStruct.AppRCTargetDataStruct.Yaw += 360.0f;
+}
+ /*=============================================================================
+ + 实现功能：
+ + 调用参数功能：
+==============================================================================*/
+void unlock()
+{
+    if(g_FlyControlDataStruct.AppConfigDataStruct.Startflg==0)  //是否起飞
+    {
+        if(g_FlyControlDataStruct.AppRcDataStruct.THR>1200)
+        {
+            g_FlyControlDataStruct.AppConfigDataStruct.Thrlow=0;//油门非低
+        }
+        else
+        {
+            g_FlyControlDataStruct.AppConfigDataStruct.Thrlow= 1;//油门拉低
+        }
+    }
+
+    if(g_FlyControlDataStruct.AppConfigDataStruct.AirStatus==0)
+    {
+        g_FlyControlDataStruct.AppConfigDataStruct.Thrlow= 1;//上锁状态下油门都标记为拉低
+    }
+
+    if(g_FlyControlDataStruct.AppConfigDataStruct.NS==3 || g_FlyControlDataStruct.AppConfigDataStruct.NS==0) return;//无信号或者蓝牙信号，不进行手势检测
+
+    //上锁
+    if(g_FlyControlDataStruct.AppRcDataStruct.THR<1200 && g_FlyControlDataStruct.AppRcDataStruct.Yaw>1750)
+    {
+        look++;
+
+        if(look>200)
+        {
+            look = 0;
+            g_FlyControlDataStruct.AppConfigDataStruct.AirStatus = 0;
+        }
+    }
+    else
+    {
+        look = 0;
+    }
+
+    //解锁检测
+    if(g_FlyControlDataStruct.AppRcDataStruct.THR<1200 && g_FlyControlDataStruct.AppRcDataStruct.Yaw<1250)
+    {
+        unlook++;
+        if(unlook>200)
+        {
+            if(g_FlyControlDataStruct.AppVoltage.V>3.85)//电压低不允许解锁
+            {
+                g_FlyControlDataStruct.AppConfigDataStruct.AirStatus = 1;
+            }
+            unlook = 0;
+        }
+    }
+    else
+    {
+        unlook = 0;
+    }
+
+    //校准检测
+    if((g_FlyControlDataStruct.AppConfigDataStruct.AirStatus==0) && (g_FlyControlDataStruct.AppRcDataStruct.THR<1200) && (g_FlyControlDataStruct.AppRcDataStruct.Pitch<1200))
+    {
+        Calibrate_cnt++;
+
+        if(Calibrate_cnt>200)
+        {
+            g_FlyControlDataStruct.AppConfigDataStruct.calibratingA=1;
+            g_FlyControlDataStruct.AppConfigDataStruct.calibratingG=1;
+            g_FlyControlDataStruct.AppHightCtrl.BaroHight = 1;
+            Calibrate_cnt = 0;
+        }
+    }
+    else
+    {
+        Calibrate_cnt = 0;
+    }
+}
+
+ /*=============================================================================
+ + 实现功能：
+ + 调用参数功能：
+==============================================================================*/
+void fail_safe()
+{
+
+    if(g_FlyControlDataStruct.AppConfigDataStruct.NS==0)
+    {
+        g_FlyControlDataStruct.AppRcDataStruct.Yaw=1500;
+        g_FlyControlDataStruct.AppRcDataStruct.Roll=1500;
+        g_FlyControlDataStruct.AppRcDataStruct.Pitch=1500;
+
+        if(g_FlyControlDataStruct.AppRcDataStruct.THR>1000)
+        {
+            g_FlyControlDataStruct.AppRcDataStruct.THR-=1;
+        }
+        else
+        {
+            g_FlyControlDataStruct.AppRcDataStruct.THR = 1000;
+
+            if(!g_FlyControlDataStruct.AppConfigDataStruct.FlyMode)
+            {
+                g_FlyControlDataStruct.AppConfigDataStruct.AirStatus = 0;
+            }
+        }
+    }
+}
+
+ /*=============================================================================
+ + 实现功能：
+ + 调用参数功能：
+==============================================================================*/
+void Static_Check(void)
+{
+    static u8 cnt;
+
+    if(g_FlyControlDataStruct.AppConfigDataStruct.AirStatus==1) return;
+
+    if( my_abs(g_FlyControlDataStruct.AppImuDataStruct.iGyroX) <= 10 &&
+            my_abs(g_FlyControlDataStruct.AppImuDataStruct.iGyroY) <= 10 &&
+            my_abs(g_FlyControlDataStruct.AppImuDataStruct.iGyroZ) <= 10
+      )		cnt ++;
+    else 	cnt = 0;
+
+    //静止5s后高度清零
+    if(cnt>=100) g_FlyControlDataStruct.AppHightCtrl.baroStart = 1;
+}
+
+ /*=============================================================================
+ + 实现功能：
+ + 调用参数功能：
+==============================================================================*/
+
+void Flag_Check(void)
+{
+    test_flag = 0;
+
+    //if(!MPU_Err)		test_flag |= BIT0;
+    //if(!SPL_Err)		test_flag |= BIT1;
+    //if(!NRF_Err)		test_flag |= BIT2;
+    //if(ult_ok)    	test_flag |= BIT3;
+    //if(!Locat_Err)  test_flag |= BIT4;
+    //if(LED_warn==1)	test_flag |= BIT5;//浣庡帇
+    //if(!Flow_Err)		test_flag |= BIT6;
+
+    set_flag = 0;
+
+    if(g_FlyControlDataStruct.AppConfigDataStruct.FlyMode == 1)	                            set_flag |= BIT0;
+    if(g_FlyControlDataStruct.AppConfigDataStruct.Throw == 1)	                            set_flag |= BIT1;
+    if(g_FlyControlDataStruct.AppConfigDataStruct.No_Head_Mode == 1)						set_flag |= BIT2;
+    if(g_FlyControlDataStruct.AppConfigDataStruct.Fixed_Point_Mode == 1)    				set_flag |= BIT4;
+    if(g_FlyControlDataStruct.AppConfigDataStruct.Fixed_Point_Mode == 1 &&  Flow_Err ==0 )  set_flag |= BIT5;
+}
+
+ /*=============================================================================
+ + 实现功能：
+ + 调用参数功能：
+==============================================================================*/
+void Call_UnLock(void)
+{
+    unlock();
+    fail_safe();//失控保护
+}
+ /*=============================================================================
+ + 实现功能：
+ + 调用参数功能：
+==============================================================================*/
+void CallRCState(void)
+{
+    NRF_SSI = NRF_SSI_CNT;
+    NRF_SSI_CNT = 0;
+
+    Bluet_SSI = Bluet_SSI_CNT;
+    Bluet_SSI_CNT = 0;
+
+    Flow_SSI = Flow_SSI_CNT;
+    Flow_SSI_CNT = 0;
+
+
+    if(NRF_SSI || Bluet_SSI)
+    {
+
+    }
+    else
+    {
+        g_FlyControlDataStruct.AppConfigDataStruct.NS = 0;
+    }
+
+    if(Flow_SSI>10)
+    {
+        Flow_Err = 0;
+    }
+    else
+    {
+        Flow_Err = 1;
+    }
+
+}
+ /*=============================================================================
+ + 实现功能：
+ + 调用参数功能：
+==============================================================================*/
+void Call_key_function(u8 key)
+{
+    extern u8 yaw_lock;
+    static u8 count1=0;
+
+    if(key&0x02)//左边按键,一键起飞和降落
+    {
+        count1++;
+        if(count1>=200)count1=200;
+    }
+    else
+    {
+        if(count1>=2)
+        {
+            //定高模式下才能启动一键起飞
+            if(g_FlyControlDataStruct.AppConfigDataStruct.FlyMode ==1)
+            {
+                if(g_FlyControlDataStruct.AppConfigDataStruct.AirStatus ==0)
+                {
+                    if(g_FlyControlDataStruct.AppVoltage.V>3.8)//电压低不允许解锁
+                    {
+                        g_FlyControlDataStruct.AppConfigDataStruct.AirStatus = 1;
+                        g_FlyControlDataStruct.AppHightCtrl.StartHight = HIGH_START;
+                    }
+                }
+                else
+                {
+                    g_FlyControlDataStruct.AppConfigDataStruct.LandDown = !g_FlyControlDataStruct.AppConfigDataStruct.LandDown;
+                }
+            }
+        }
+        count1=0;
+    }
+}
+
+
+
+
+

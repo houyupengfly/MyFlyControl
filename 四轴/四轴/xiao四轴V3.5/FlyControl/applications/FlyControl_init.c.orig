@@ -1,0 +1,96 @@
+/*=============================================================================
+** 作者：侯玉鹏
+** 日期：2017/10/31
+** 版本：V1.0
+** 函数名:
+** 函数功能：
+** 输入参数：
+** 输出 ：1  返回值：
+          2  改变的全局变量
+** 本函数调用的其它函数（版本号）：
+** 备注：
+** 修改日志： （作者，日期，修改内容及原因）
+============================== INCLUDES ======================================*/
+#include "FlyControl_init.h"
+#include "FlyControlDataStruct.h"
+#include "device_timer.h"
+#include "device_pwm_out.h"
+#include "device_iic.h"
+#include "device_spi.h"
+#include "device_mpu6050.h"
+#include "device_mpc2520.h"
+#include "device_Nrf24l01.h"
+#include "device_Bluetooth.h"
+#include "device_flow.h"
+#include "device_ADC.h"
+#include "data_transfer.h"
+#include "Parameter.h"
+#include "systream_time.h"
+/*============================ INCLUDES ======================================*/
+
+
+/*============================ MACROS ========================================*/
+
+
+/*============================ TYPES =========================================*/
+
+/*============================ GLOBAL VARIABLES ==============================*/
+
+/*============================ STATIC VARIABLES ==============================*/
+u8 init_finish;
+u8 nrf_eanble;
+extern FlyControlDataStruct g_FlyControlDataStruct;
+extern ParamStatus_EnumType g_ParamStatusStruct;
+/*============================ FUNCTION ======================================*/
+ /*=============================================================================
+ + 实现功能：
+ + 调用参数功能：
+==============================================================================*/
+void Fly_Control_Init()
+{
+    /* 开启系统定时器 */
+    Fc_SysTick_Configuration();
+    /* 初始化信号输出功能400HZ*/
+    Fc_Pwm_Out_Config();
+    /*SPI 初始化*/
+    Fc_Spi_Init();
+    /*NRF24L01初始化*/
+    nrf_eanble = Nrf_Check();
+    //如果连接正常，则将NRF初始化
+    if(nrf_eanble)
+    {
+        Fc_Nrf_Init(MODEL_RX2,103);
+    }
+    /* 参数初始化 */
+    Fc_Para_Init();
+    /* I2C初始化 */
+    Fc_I2c_Init();
+    Delay_ms(200);
+    /* 气压计初始化 */
+    Fc_Spl0601_Init();
+    Delay_ms(200);
+    /* 加速度计、陀螺仪初始化，配置20hz低通 */
+    MPU6050_Init(20);
+    Delay_ms(200);
+    /* 数传初始化 */
+    Fc_Data_transfer_init();
+    Delay_ms(200);
+    /*蓝牙初始化s*/
+    Fc_Blue_Init();
+    Delay_ms(200);
+    /* 光流模块初始化*/
+    Fc_Flow_Init();
+    /* 时间统计初始化 */
+    Fc_Cycle_Time_Init();
+    /* ADC电压检测初始*/
+    Fc_Adc_Init();
+    /* 硬件故障指示 */
+
+    /* 初始化结束标识 */
+    g_ParamStatusStruct = ReadAllParam;
+    g_FlyControlDataStruct.AppConfigDataStruct.FlyMode = 0;
+    init_finish = 1;
+
+}
+
+

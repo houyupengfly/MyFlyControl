@@ -1,0 +1,195 @@
+/*=============================================================================
+** 作者：侯玉鹏
+** 日期：2017/10/31
+** 版本：V1.0
+** 函数名:
+** 函数功能：
+** 输入参数：
+** 输出 ：1  返回值：
+          2  改变的全局变量
+** 本函数调用的其它函数（版本号）：
+** 备注：
+** 修改日志： （作者，日期，修改内容及原因）
+==============================================================================*/
+/*---------------------------- INCLUDES -------------------------------------*/
+
+#include "Fc_Parameter.h"
+#include "Fc_data_Struct.h"
+
+#include "device_flash.h"
+#include "basetype.h"
+
+#include "string.h"
+
+
+/*---------------------------- MACROS ---------------------------------------*/
+
+
+/*---------------------------- MACROFIED FUNCTIONS --------------------------*/
+/*---------------------------- TYPES ----------------------------------------*/
+/*---------------------------- EXTERNAL VARIABLES ---------------------------*/
+extern FlyControlDataStruct g_FlyControlDataStruct;
+
+/*---------------------------- GLOBAL VARIABLES -----------------------------*/
+u16 save_pid_en = 0;
+/*---------------------------- LOCAL VARIABLES ------------------------------*/
+ParamCtl_Type g_AllParamStruct;
+
+/*---------------------------- PROTOTYPES -----------------------------------*/
+/*---------------------------- IMPLEMENTATION -------------------------------*/
+void Param_Save(void)
+{
+	Fc_Flash_Write((u8 *)(&g_AllParamStruct),sizeof(g_AllParamStruct));
+
+//    g_FlyControlDataStruct.AppImuDataStruct.GyroXoffest   = g_AllParamStruct.IMU1_GyroBias.x;
+//    g_FlyControlDataStruct.AppImuDataStruct.GyroYoffest   = g_AllParamStruct.IMU1_GyroBias.y;
+//    g_FlyControlDataStruct.AppImuDataStruct.GyroZoffest   = g_AllParamStruct.IMU1_GyroBias.z;
+//    
+//    g_FlyControlDataStruct.AppImuDataStruct.AccXoffest    = g_AllParamStruct.IMU1_Up_AccBias.x;
+//    g_FlyControlDataStruct.AppImuDataStruct.AccYoffest    = g_AllParamStruct.IMU1_Up_AccBias.y;
+//    g_FlyControlDataStruct.AppImuDataStruct.AccZoffest    = g_AllParamStruct.IMU1_Up_AccBias.z;
+            
+    g_FlyControlDataStruct.AppCtrlStruct.Roll.GyroPid.p   = g_AllParamStruct.Roll_In_Loop.Kp;
+    g_FlyControlDataStruct.AppCtrlStruct.Roll.GyroPid.i   = g_AllParamStruct.Roll_In_Loop.Ki;
+    g_FlyControlDataStruct.AppCtrlStruct.Roll.GyroPid.d   = g_AllParamStruct.Roll_In_Loop.Kd ;
+    g_FlyControlDataStruct.AppCtrlStruct.Pitch.GyroPid.p  = g_AllParamStruct.Pitch_In_Loop.Kp;
+    g_FlyControlDataStruct.AppCtrlStruct.Pitch.GyroPid.i  = g_AllParamStruct.Pitch_In_Loop.Ki;
+    g_FlyControlDataStruct.AppCtrlStruct.Pitch.GyroPid.d  = g_AllParamStruct.Pitch_In_Loop.Kd;
+    g_FlyControlDataStruct.AppCtrlStruct.Yaw.GyroPid.p 	  = g_AllParamStruct.Yaw_In_Loop.Kp;
+    g_FlyControlDataStruct.AppCtrlStruct.Yaw.GyroPid.i 	  = g_AllParamStruct.Yaw_In_Loop.Ki;
+    g_FlyControlDataStruct.AppCtrlStruct.Yaw.GyroPid.d 	  = g_AllParamStruct.Yaw_In_Loop.Kd;
+    
+    g_FlyControlDataStruct.AppCtrlStruct.Roll.AnglePid.p  = g_AllParamStruct.Roll_Out_Loop.Kp;
+    g_FlyControlDataStruct.AppCtrlStruct.Roll.AnglePid.i  = g_AllParamStruct.Roll_Out_Loop.Ki;
+    g_FlyControlDataStruct.AppCtrlStruct.Roll.AnglePid.d  = g_AllParamStruct.Roll_Out_Loop.Kd ;
+    g_FlyControlDataStruct.AppCtrlStruct.Pitch.AnglePid.p = g_AllParamStruct.Pitch_Out_Loop.Kp;
+    g_FlyControlDataStruct.AppCtrlStruct.Pitch.AnglePid.i = g_AllParamStruct.Pitch_Out_Loop.Ki;
+    g_FlyControlDataStruct.AppCtrlStruct.Pitch.AnglePid.d = g_AllParamStruct.Pitch_Out_Loop.Kd;
+    g_FlyControlDataStruct.AppCtrlStruct.Yaw.AnglePid.p   = g_AllParamStruct.Yaw_Out_Loop.Kp;
+    g_FlyControlDataStruct.AppCtrlStruct.Yaw.AnglePid.i   = g_AllParamStruct.Yaw_Out_Loop.Ki;
+    g_FlyControlDataStruct.AppCtrlStruct.Yaw.AnglePid.d   = g_AllParamStruct.Yaw_Out_Loop.Kd;		
+    
+    
+    g_FlyControlDataStruct.AppHightCtrl.SpeedCtrl.p       = g_AllParamStruct.Alti_In_Loop.Kp;
+    g_FlyControlDataStruct.AppHightCtrl.SpeedCtrl.i       = g_AllParamStruct.Alti_In_Loop.Ki;
+    g_FlyControlDataStruct.AppHightCtrl.SpeedCtrl.d       = g_AllParamStruct.Alti_In_Loop.Kd;
+    g_FlyControlDataStruct.AppHightCtrl.HightCtrl.p       = g_AllParamStruct.Alti_Out_Loop.Kp;
+    g_FlyControlDataStruct.AppHightCtrl.HightCtrl.i       = g_AllParamStruct.Alti_Out_Loop.Ki;
+    g_FlyControlDataStruct.AppHightCtrl.HightCtrl.d       = g_AllParamStruct.Alti_Out_Loop.Kd;
+
+}
+
+void Fc_Para_Init(void)
+{
+
+    g_AllParamStruct.Roll_In_Loop.Kp  = 0;  
+    g_AllParamStruct.Roll_In_Loop.Ki  = 0;  
+    g_AllParamStruct.Roll_In_Loop.Kd  = 0;  
+    g_AllParamStruct.Pitch_In_Loop.Kp = 0;  
+    g_AllParamStruct.Pitch_In_Loop.Ki = 0;   
+    g_AllParamStruct.Pitch_In_Loop.Kd = 0; 
+    g_AllParamStruct.Yaw_In_Loop.Kp   = 0; 	
+    g_AllParamStruct.Yaw_In_Loop.Ki   = 0; 
+    g_AllParamStruct.Yaw_In_Loop.Kd   = 0;
+
+    g_AllParamStruct.Roll_Out_Loop.Kp =  0;  
+    g_AllParamStruct.Roll_Out_Loop.Ki =  0;
+    g_AllParamStruct.Roll_Out_Loop.Kd =  0; 
+    g_AllParamStruct.Pitch_Out_Loop.Kp=  0;
+    g_AllParamStruct.Pitch_Out_Loop.Ki=  0;
+    g_AllParamStruct.Pitch_Out_Loop.Kd=  0; 
+    g_AllParamStruct.Yaw_Out_Loop.Kp  =  0;
+    g_AllParamStruct.Yaw_Out_Loop.Ki  =  0;
+    g_AllParamStruct.Yaw_Out_Loop.Kd  =	 0; 
+
+
+    g_AllParamStruct.Alti_In_Loop.Kp =   0;
+    g_AllParamStruct.Alti_In_Loop.Ki =   0;
+    g_AllParamStruct.Alti_In_Loop.Kd =   0;
+    g_AllParamStruct.Alti_Out_Loop.Kp =  0;
+    g_AllParamStruct.Alti_Out_Loop.Ki =  0;
+    g_AllParamStruct.Alti_Out_Loop.Kd =  0;
+
+    g_AllParamStruct.ParamStatusFlag = 0x88;
+   
+    Param_Save();
+
+}
+
+void Fc_Param_Read(void)
+{
+	Fc_Flash_Read((u8 *)(&g_AllParamStruct),sizeof(g_AllParamStruct));
+	if(g_AllParamStruct.ParamStatusFlag != 0X88)//板子从未初始化
+	{
+		Fc_Para_Init();
+		g_FlyControlDataStruct.AppConfigDataStruct.calibratingA = 1;	
+		g_FlyControlDataStruct.AppConfigDataStruct.calibratingG = 1;	
+	}
+    
+    
+		g_FlyControlDataStruct.AppImuDataStruct.GyroXoffest = g_AllParamStruct.IMU1_GyroBias.x;
+		g_FlyControlDataStruct.AppImuDataStruct.GyroYoffest = g_AllParamStruct.IMU1_GyroBias.y;
+		g_FlyControlDataStruct.AppImuDataStruct.GyroZoffest = g_AllParamStruct.IMU1_GyroBias.z;
+		
+		g_FlyControlDataStruct.AppImuDataStruct.AccXoffest = g_AllParamStruct.IMU1_Up_AccBias.x;
+		g_FlyControlDataStruct.AppImuDataStruct.AccYoffest = g_AllParamStruct.IMU1_Up_AccBias.y;
+		g_FlyControlDataStruct.AppImuDataStruct.AccZoffest = g_AllParamStruct.IMU1_Up_AccBias.z;
+	    	
+		
+				
+		g_FlyControlDataStruct.AppCtrlStruct.Roll.GyroPid.p        = g_AllParamStruct.Roll_In_Loop.Kp;
+		g_FlyControlDataStruct.AppCtrlStruct.Roll.GyroPid.i        = g_AllParamStruct.Roll_In_Loop.Ki;
+		g_FlyControlDataStruct.AppCtrlStruct.Roll.GyroPid.d        = g_AllParamStruct.Roll_In_Loop.Kd ;
+		g_FlyControlDataStruct.AppCtrlStruct.Pitch.GyroPid.p       = g_AllParamStruct.Pitch_In_Loop.Kp;
+		g_FlyControlDataStruct.AppCtrlStruct.Pitch.GyroPid.i       = g_AllParamStruct.Pitch_In_Loop.Ki;
+		g_FlyControlDataStruct.AppCtrlStruct.Pitch.GyroPid.d       = g_AllParamStruct.Pitch_In_Loop.Kd;
+		g_FlyControlDataStruct.AppCtrlStruct.Yaw.GyroPid.p 	       = g_AllParamStruct.Yaw_In_Loop.Kp;
+		g_FlyControlDataStruct.AppCtrlStruct.Yaw.GyroPid.i 	       = g_AllParamStruct.Yaw_In_Loop.Ki;
+		g_FlyControlDataStruct.AppCtrlStruct.Yaw.GyroPid.d 	       = g_AllParamStruct.Yaw_In_Loop.Kd;
+		
+		g_FlyControlDataStruct.AppCtrlStruct.Roll.AnglePid.p       = g_AllParamStruct.Roll_Out_Loop.Kp;
+		g_FlyControlDataStruct.AppCtrlStruct.Roll.AnglePid.i       = g_AllParamStruct.Roll_Out_Loop.Ki;
+		g_FlyControlDataStruct.AppCtrlStruct.Roll.AnglePid.d       = g_AllParamStruct.Roll_Out_Loop.Kd ;
+		g_FlyControlDataStruct.AppCtrlStruct.Pitch.AnglePid.p      =  g_AllParamStruct.Pitch_Out_Loop.Kp;
+		g_FlyControlDataStruct.AppCtrlStruct.Pitch.AnglePid.i      = g_AllParamStruct.Pitch_Out_Loop.Ki;
+		g_FlyControlDataStruct.AppCtrlStruct.Pitch.AnglePid.d      = g_AllParamStruct.Pitch_Out_Loop.Kd;
+		g_FlyControlDataStruct.AppCtrlStruct.Yaw.AnglePid.p 	   = g_AllParamStruct.Yaw_Out_Loop.Kp;
+		g_FlyControlDataStruct.AppCtrlStruct.Yaw.AnglePid.i 	   = g_AllParamStruct.Yaw_Out_Loop.Ki;
+		g_FlyControlDataStruct.AppCtrlStruct.Yaw.AnglePid.d 	   = g_AllParamStruct.Yaw_Out_Loop.Kd;		
+		
+		
+	    g_FlyControlDataStruct.AppHightCtrl.SpeedCtrl.p            = g_AllParamStruct.Alti_In_Loop.Kp;
+        g_FlyControlDataStruct.AppHightCtrl.SpeedCtrl.i            = g_AllParamStruct.Alti_In_Loop.Ki;
+        g_FlyControlDataStruct.AppHightCtrl.SpeedCtrl.d            = g_AllParamStruct.Alti_In_Loop.Kd;
+        g_FlyControlDataStruct.AppHightCtrl.HightCtrl.p            = g_AllParamStruct.Alti_Out_Loop.Kp;
+        g_FlyControlDataStruct.AppHightCtrl.HightCtrl.i            = g_AllParamStruct.Alti_Out_Loop.Ki;
+        g_FlyControlDataStruct.AppHightCtrl.HightCtrl.d            = g_AllParamStruct.Alti_Out_Loop.Kd;
+}
+
+void Fc_PID_Save_Overtime(u16 ms,u16 dTms)
+{
+	if(save_pid_en!=0)
+	{
+		save_pid_en++;
+	}
+	
+	if(save_pid_en>=(ms/dTms))
+	{
+		Param_Save();
+		save_pid_en = 0;
+	}
+}
+
+
+
+
+
+
+
+
+
+/*---------------------------- End ------------------------------------------*/
+
+
+
+

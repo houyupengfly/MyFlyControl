@@ -1,0 +1,151 @@
+
+/*=============================================================================
+** 作者：侯玉鹏
+** 日期：2017/10/31
+** 版本：V1.0
+** 函数名: 
+** 函数功能：
+** 输入参数：
+** 输出 ：1  返回值：
+          2  改变的全局变量
+** 本函数调用的其它函数（版本号）：
+** 备注：
+** 修改日志： （作者，日期，修改内容及原因）
+==============================================================================*/
+
+/*============================ INCLUDES ======================================*/
+#include "device_IST8310.h"
+#include "device_iic.h"
+#include "systream_time.h"
+#include "FlyControlDataStruct.h"
+#include "Algorithm_math.h"
+#include <math.h>
+#include "Parameter.h"
+/*============================ MACROS ========================================*/
+
+/*============================ TYPES =========================================*/
+
+/*============================ GLOBAL VARIABLES ==============================*/
+
+#define MAG_REVERSE_SIDE
+/*============================ STATIC VARIABLES ==============================*/
+IST8310 Mag_IST8310;
+extern FlyControlDataStruct g_FlyControlDataStruct;
+extern ParamStatus_EnumType g_ParamStatusStruct;
+//当前磁场的最大值和最小值
+s16  HMC58X3_limit[6]={0};
+s16  *mag_limt = HMC58X3_limit;
+/*============================ FUNCTION ======================================*/
+
+void IST8310_Init(void)
+{
+  I2C_FastMode = 0;
+  IIC_Write_1Byte(IST8310_SLAVE_ADDRESS,0x41,0x24);//开启16x内部平均
+  IIC_Write_1Byte(IST8310_SLAVE_ADDRESS,0x42,0xC0);//Set/Reset内部平均
+}
+
+
+void Mag_Calibration(s16 *array)
+{
+	u8 cy;
+	static u8  clen_flag=1; 
+	static float x,y,z; 
+	
+	//校准之前先把之前数据清零
+	if(clen_flag){
+		clen_flag = 0;
+		x=y=z=0;
+		for(cy=0;cy<6;cy++)
+			*(mag_limt+cy)=0;
+	}
+  
+	// 开始采集 寻找三个轴的最大和最小值
+	for(cy=0;cy<3;cy++){
+		if(*(mag_limt+cy)> *(array+cy)) *(mag_limt+cy) = *(array+cy);  //找最小
+
+		else if(*(mag_limt+cy+3)<*(array+cy)) *(mag_limt+cy+3) = *(array+cy);  //找最大
+	}
+	//下面就是判断进行地磁校准的动作利用加速度计判断是否垂直，利用陀螺仪判断是否转满了360度
+	if(g_FlyControlDataStruct.AppConfigDataStruct.calibratingM == 1 && (absu16(g_FlyControlDataStruct.AppImuDataStruct.iAccZ) > 3800))   {
+	  z += g_FlyControlDataStruct.AppImuDataStruct.GyroZFilterout *0.002f;
+		if(absFloat(z)>360)  g_FlyControlDataStruct.AppConfigDataStruct.calibratingM = 2;
+	}
+	
+	if(g_FlyControlDataStruct.AppConfigDataStruct.calibratingM == 2 && (absu16(g_FlyControlDataStruct.AppImuDataStruct.iAccX) > 3800))   {
+	  x += g_FlyControlDataStruct.AppImuDataStruct.GyroXFilterout *0.002f;
+		if(absFloat(x)>360)  g_FlyControlDataStruct.AppConfigDataStruct.calibratingM = 3;
+	}
+	
+	if(g_FlyControlDataStruct.AppConfigDataStruct.calibratingM == 3 && (absu16(g_FlyControlDataStruct.AppImuDataStruct.iAccY) > 3800))   {
+	  y += g_FlyControlDataStruct.AppImuDataStruct.GyroYFilterout * 0.002f;
+		if(absFloat(y)>360)  {
+			clen_flag = 1;
+			g_FlyControlDataStruct.AppConfigDataStruct.calibratingM = 0;
+	        g_ParamStatusStruct = WriteAllParam;
+		}
+	}	
+}
+
+void Get_Mag_IST8310(void)
+{ 	
+    static u8 onc=1;
+	u8 cy=0;
+	u8 con=0;
+	
+	IIC_Write_1Byte(IST8310_SLAVE_ADDRESS,IST8310_REG_CNTRL1,0x01);//Single Measurement Mode
+	Delay_ms(8);
+
+	IIC_Read_1Byte(IST8310_SLAVE_ADDRESS,0x03,&Mag_IST8310.Buf[0]);//OUT_X_L_A
+	IIC_Read_1Byte(IST8310_SLAVE_ADDRESS,0x04,&Mag_IST8310.Buf[1]);//OUT_X_H_A
+	IIC_Read_1Byte(IST8310_SLAVE_ADDRESS,0x05,&Mag_IST8310.Buf[2]);//OUT_Y_L_A
+	IIC_Read_1Byte(IST8310_SLAVE_ADDRESS,0x06,&Mag_IST8310.Buf[3]);//OUT_Y_H_A
+	IIC_Read_1Byte(IST8310_SLAVE_ADDRESS,0x07,&Mag_IST8310.Buf[4]);//OUT_Z_L_A
+	IIC_Read_1Byte(IST8310_SLAVE_ADDRESS,0x08,&Mag_IST8310.Buf[5]);//OUT_Z_H_A
+	/*****************合成三轴磁力计数据******************/
+	Mag_IST8310.Mag_Data[0]=(Mag_IST8310.Buf[1]<<8)|Mag_IST8310.Buf[0];
+	Mag_IST8310.Mag_Data[1]=(Mag_IST8310.Buf[3]<<8)|Mag_IST8310.Buf[2];
+	Mag_IST8310.Mag_Data[2]=(Mag_IST8310.Buf[5]<<8)|Mag_IST8310.Buf[4];
+
+	#ifdef MAG_REVERSE_SIDE//重新映射磁力计三轴数据
+	Mag_IST8310.Mag_Data[0] = -Mag_IST8310.Mag_Data[0];
+	Mag_IST8310.Mag_Data[1]= -Mag_IST8310.Mag_Data[1];
+	Mag_IST8310.Mag_Data[2] = -Mag_IST8310.Mag_Data[2];
+	#else
+	Mag_IST8310.Mag_Data[0]= Mag_IST8310.Mag_Data[0];
+	Mag_IST8310.Mag_Data[1] = Mag_IST8310.Mag_Data[1];
+	Mag_IST8310.Mag_Data[2] = Mag_IST8310.Mag_Data[2];
+	#endif
+	if(g_FlyControlDataStruct.AppConfigDataStruct.calibratingM)
+	{	
+		Mag_Calibration( Mag_IST8310.Mag_Data);
+	}
+	if(onc){
+		onc=0;
+		
+		// 三个轴的最值都偏小 说明地磁有问题，停用地磁  
+		for(cy=0;cy<6;cy++)	{
+			if(absu16(*(mag_limt+cy))<20)	con++;
+		}
+		if(con>=2) g_FlyControlDataStruct.AppConfigDataStruct.calibratingOK = 1;
+  }
+	
+	// 修正
+	for(cy=0;cy<3;cy++)
+		*(Mag_IST8310.Mag_Data+cy) = (float)(Mag_IST8310.Mag_Data[cy] -(*(mag_limt+cy+3) + *(mag_limt+cy))/2);
+  
+	g_FlyControlDataStruct.AppImuDataStruct.mag[0] = Mag_IST8310.Mag_Data[0];
+	g_FlyControlDataStruct.AppImuDataStruct.mag[1] = Mag_IST8310.Mag_Data[1];
+	g_FlyControlDataStruct.AppImuDataStruct.mag[2] = Mag_IST8310.Mag_Data[2];
+	Mag_IST8310.thx  =  g_FlyControlDataStruct.AppImuDataStruct.mag[0]*cos(g_FlyControlDataStruct.App_AngleStruct.RPitch) +  g_FlyControlDataStruct.AppImuDataStruct.mag[1]*sin(g_FlyControlDataStruct.App_AngleStruct.RRoll)
+    *sin(g_FlyControlDataStruct.App_AngleStruct.RPitch) -  g_FlyControlDataStruct.AppImuDataStruct.mag[2]*cos(g_FlyControlDataStruct.App_AngleStruct.RRoll)*sin(g_FlyControlDataStruct.App_AngleStruct.RPitch); 
+    Mag_IST8310.thy =  g_FlyControlDataStruct.AppImuDataStruct.mag[1]*cos(g_FlyControlDataStruct.App_AngleStruct.RRoll)  -  g_FlyControlDataStruct.AppImuDataStruct.mag[2]*sin(g_FlyControlDataStruct.App_AngleStruct.RRoll);
+//	
+//	Mag_IST8310.thx = g_FlyControlDataStruct.AppImuDataStruct.mag[0] * cos(g_FlyControlDataStruct.App_AngleStruct.RPitch)+ g_FlyControlDataStruct.AppImuDataStruct.mag[1] * sin(g_FlyControlDataStruct.App_AngleStruct.RRoll)*sin(g_FlyControlDataStruct.App_AngleStruct.RPitch)
+//	+g_FlyControlDataStruct.AppImuDataStruct.mag[2]*cos(g_FlyControlDataStruct.App_AngleStruct.RRoll)*sin(g_FlyControlDataStruct.App_AngleStruct.RPitch);
+//    Mag_IST8310.thy = g_FlyControlDataStruct.AppImuDataStruct.mag[1] * cos(g_FlyControlDataStruct.App_AngleStruct.RRoll) -g_FlyControlDataStruct.AppImuDataStruct.mag[2] *sin(g_FlyControlDataStruct.App_AngleStruct.RRoll);
+   /***********反正切得到磁力计观测角度*********/
+    Mag_IST8310.Angle_Mag=atan2(Mag_IST8310.thx,Mag_IST8310.thy)*57.296;
+
+}
+
+

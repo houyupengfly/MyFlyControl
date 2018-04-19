@@ -1,0 +1,1601 @@
+#include "stm32f10x.h"
+#include "device_usart.h"
+
+Uart1_Typedef  Uart1_Infor= {0};
+Uart3_Typedef  Uart3_Infor= {{0},{0},0,0,U3_Rx_OK,1};
+Uart4_Typedef  Uart4_Infor= {{0},NULL,U4_Tx_OK,0,0,{0},0,0,U4_Tx_ing};
+Uart5_Typedef  Uart5_Infor= {0};
+//u8 Uart1_TemBuf;
+
+uint8_t afterpulse_state;//赵晓松20161013
+uint8_t HalfPowerFlag;   //赵晓松20160928
+uint8_t EnterChargeState = 0; //赵晓松20170227
+uint16_t rx_cmd_flag=0;
+uint8_t BlanceVersion[4]= {0}; //anlingna  2016.11.16
+/***************************************************************
+** 作者：田松召
+** 日期：2015.3.10
+** 版本：V1.0
+** 函数名: Uart1_Init(u32 baud)
+** 函数功能：Uart1初始化 配置时钟，端口，Uart参数
+** 输入参数：baud ：数据通信波特率
+** 输出 ：1  返回值：
+	        2  改变的全局变量
+** 本函数调用的其它函数（版本号）：
+** 备注：
+** 修改日志： （作者，日期，修改内容及原因）
+***************************************************************/
+void Uart1_Init(u32 baud)
+{
+  GPIO_InitTypeDef GPIO_InitStructure;
+  USART_InitTypeDef USART_InitStructure;
+  NVIC_InitTypeDef NVIC_InitStructure;
+
+  RCC_APB2PeriphClockCmd(USART1_CLK|USART1_GPIO_CLK|RCC_APB2Periph_AFIO, ENABLE);	//使能USART1，GPIOA时钟
+
+  GPIO_InitStructure.GPIO_Pin = USART1_TxPin; ////USART1_TX   PA.9
+  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;	//复用推挽输出
+  GPIO_Init(USART1_GPIO, &GPIO_InitStructure);
+
+  GPIO_InitStructure.GPIO_Pin = USART1_RxPin; //USART1_RX	  PA.10
+  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;//浮空输入
+  GPIO_Init(USART1_GPIO, &GPIO_InitStructure);
+
+  NVIC_InitStructure.NVIC_IRQChannel = USART1_IRQn;  //Usart1 NVIC 配置  SPI3_IRQn
+  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority=0 ;//抢占优先级3 最低优先级
+  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;		//子优先级3
+  NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;			//IRQ通道使能
+  NVIC_Init(&NVIC_InitStructure);	//根据指定的参数初始化VIC寄存器
+
+  USART_InitStructure.USART_BaudRate = baud;//一般设置为9600;
+  USART_InitStructure.USART_WordLength = USART_WordLength_8b;//字长为8位数据格式
+  USART_InitStructure.USART_StopBits = USART_StopBits_1;//一个停止位
+  USART_InitStructure.USART_Parity = USART_Parity_No;//无奇偶校验位
+  USART_InitStructure.USART_HardwareFlowControl = USART_HardwareFlowControl_None;//无硬件数据流控制
+  USART_InitStructure.USART_Mode = USART_Mode_Rx | USART_Mode_Tx;	//收发模式
+
+  USART_Init(USART1, &USART_InitStructure); //初始化串口
+  USART_ITConfig(USART1, USART_IT_RXNE, ENABLE);//开启中断
+  USART_Cmd(USART1, ENABLE);                    //使能串口
+}
+
+/***************************************************************
+** 作者：田松召
+** 日期：2015.3.10
+** 版本：V1.0
+** 函数名: Uart3_Init(u32 baud)
+** 函数功能：Uart3初始化 配置时钟，端口，Uart参数
+** 输入参数：baud ：数据通信波特率
+** 输出 ：1  返回值：
+	        2  改变的全局变量
+** 本函数调用的其它函数（版本号）：
+** 备注：
+** 修改日志： （作者，日期，修改内容及原因）
+***************************************************************/
+void Uart3_Init(u32 baud)
+{
+  GPIO_InitTypeDef GPIO_InitStructure;
+  USART_InitTypeDef USART_InitStructure;
+  NVIC_InitTypeDef NVIC_InitStructure;
+
+  RCC_APB2PeriphClockCmd(USART3_GPIO_CLK|RCC_APB2Periph_AFIO, ENABLE);
+  RCC_APB1PeriphClockCmd(USART3_CLK,ENABLE);
+
+  GPIO_InitStructure.GPIO_Pin = USART3_TxPin;
+  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;	//复用推挽输出
+  GPIO_Init(USART3_GPIO, &GPIO_InitStructure);
+
+  GPIO_InitStructure.GPIO_Pin = USART3_RxPin;
+  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;//浮空输入
+  GPIO_Init(USART3_GPIO, &GPIO_InitStructure);
+
+  NVIC_InitStructure.NVIC_IRQChannel = USART3_IRQn;  //Usart3 NVIC 配置
+  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority=2 ;//抢占优先级3 最低优先级
+  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 3;		//子优先级3
+  NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;			//IRQ通道使能
+  NVIC_Init(&NVIC_InitStructure);	//根据指定的参数初始化VIC寄存器
+
+  USART_InitStructure.USART_BaudRate = baud;
+  USART_InitStructure.USART_WordLength = USART_WordLength_8b;//字长为8位数据格式
+  USART_InitStructure.USART_StopBits = USART_StopBits_1;//一个停止位
+  USART_InitStructure.USART_Parity = USART_Parity_No;//无奇偶校验位
+  USART_InitStructure.USART_HardwareFlowControl = USART_HardwareFlowControl_None;//无硬件数据流控制
+  USART_InitStructure.USART_Mode = USART_Mode_Rx | USART_Mode_Tx;	//收发模式
+
+  USART_Init(USART3, &USART_InitStructure); //初始化串口
+  USART_ITConfig(USART3, USART_IT_RXNE, ENABLE);//开启中断
+  USART_Cmd(USART3, ENABLE);                    //使能串口
+}
+
+/***************************************************************
+** 作者：田松召
+** 日期：2015.3.10
+** 版本：V1.0
+** 函数名: Uart4_Init(u32 baud)
+** 函数功能：Uart4初始化 配置时钟，端口，Uart参数
+** 输入参数：baud ：数据通信波特率
+** 输出 ：1  返回值：
+	        2  改变的全局变量
+** 本函数调用的其它函数（版本号）：
+** 备注：用于线检
+** 修改日志： （作者，日期，修改内容及原因）
+***************************************************************/
+void Uart4_Init(u32 baud)
+{
+  GPIO_InitTypeDef GPIO_InitStructure;
+  USART_InitTypeDef USART_InitStructure;
+  NVIC_InitTypeDef NVIC_InitStructure;
+
+  RCC_APB2PeriphClockCmd(UART4_GPIO_CLK|RCC_APB2Periph_AFIO, ENABLE);	//使能USART1，GPIOA时钟
+  RCC_APB1PeriphClockCmd(UART4_CLK, ENABLE);
+  GPIO_InitStructure.GPIO_Pin = UART4_TxPin;
+  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;	//复用推挽输出
+  GPIO_Init(UART4_GPIO, &GPIO_InitStructure);
+
+  GPIO_InitStructure.GPIO_Pin = UART4_RxPin;
+  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;//浮空输入
+  GPIO_Init(UART4_GPIO, &GPIO_InitStructure);
+
+  NVIC_InitStructure.NVIC_IRQChannel = UART4_IRQn;  //Usart1 NVIC 配置  SPI3_IRQn
+  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority=3 ;//抢占优先级3 最低优先级
+  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 3;		//子优先级3
+  NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;			//IRQ通道使能
+  NVIC_Init(&NVIC_InitStructure);	//根据指定的参数初始化VIC寄存器
+
+  USART_InitStructure.USART_BaudRate = baud;//一般设置为9600;
+  USART_InitStructure.USART_WordLength = USART_WordLength_8b;//字长为8位数据格式
+  USART_InitStructure.USART_StopBits = USART_StopBits_1;//一个停止位
+  USART_InitStructure.USART_Parity = USART_Parity_No;//无奇偶校验位
+  USART_InitStructure.USART_HardwareFlowControl = USART_HardwareFlowControl_None;//无硬件数据流控制
+  USART_InitStructure.USART_Mode = USART_Mode_Rx | USART_Mode_Tx;	//收发模式
+
+  USART_ClearFlag(UART4,USART_FLAG_TC);
+  USART_Init(UART4, &USART_InitStructure); //初始化串口
+  USART_ITConfig(UART4, USART_IT_RXNE, ENABLE);//开启中断
+  USART_ITConfig(UART4, USART_IT_TC, ENABLE);
+  USART_Cmd(UART4, ENABLE);                    //使能串口
+  USART_ClearFlag(UART4,USART_FLAG_TC);
+  USART_ClearITPendingBit(UART4,USART_IT_TC);
+}
+
+/***************************************************************
+** 作者：田松召
+** 日期：2016.3.10
+** 版本：V1.0
+** 函数名: Uart5_Init(u32 baud)
+** 函数功能：Uart5初始化 配置时钟，端口，Uart参数
+** 输入参数：baud ：数据通信波特率
+** 输出 ：1  返回值：
+	        2  改变的全局变量
+** 本函数调用的其它函数（版本号）：
+** 备注：用于电源管理
+** 修改日志： （作者，日期，修改内容及原因）
+***************************************************************/
+void Uart5_Init(u32 baud)
+{
+  GPIO_InitTypeDef GPIO_InitStructure;
+  USART_InitTypeDef USART_InitStructure;
+  NVIC_InitTypeDef NVIC_InitStructure;
+
+  RCC_APB2PeriphClockCmd(UART5_GPIO_CLK|RCC_APB2Periph_AFIO, ENABLE);	//使能USART1，GPIOA时钟
+  RCC_APB1PeriphClockCmd(UART5_CLK, ENABLE);
+
+  GPIO_InitStructure.GPIO_Pin = UART5_TxPin;
+  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;	//复用推挽输出
+  GPIO_Init(UART5_GPIO_Tx, &GPIO_InitStructure);
+
+  GPIO_InitStructure.GPIO_Pin = UART5_RxPin;
+  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;//浮空输入
+  GPIO_Init(UART5_GPIO_Rx, &GPIO_InitStructure);
+
+  NVIC_InitStructure.NVIC_IRQChannel = UART5_IRQn;
+  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority=3 ;//抢占优先级3 最低优先级
+  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 3;		//子优先级3
+  NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;			//IRQ通道使能
+  NVIC_Init(&NVIC_InitStructure);	//根据指定的参数初始化VIC寄存器
+
+  USART_InitStructure.USART_BaudRate = baud;//一般设置为9600;
+  USART_InitStructure.USART_WordLength = USART_WordLength_8b;//字长为8位数据格式
+  USART_InitStructure.USART_StopBits = USART_StopBits_1;//一个停止位
+  USART_InitStructure.USART_Parity = USART_Parity_No;//无奇偶校验位
+  USART_InitStructure.USART_HardwareFlowControl = USART_HardwareFlowControl_None;//无硬件数据流控制
+  USART_InitStructure.USART_Mode = USART_Mode_Rx | USART_Mode_Tx;	//收发模式
+
+  USART_Init(UART5, &USART_InitStructure); //初始化串口
+  USART_ITConfig(UART5, USART_IT_RXNE, ENABLE);//开启中断
+  USART_Cmd(UART5, ENABLE);                    //使能串口
+}
+/***************************************************************
+** 函数名称: UART3SendByte
+** 功能描述: 发送单字节
+** 输　  入:
+** 输　  出:
+** 作　  者: 张扬帆
+** 日　  期: 2016年06月20日
+***************************************************************/
+void UART1SendByte(uint8_t dat)
+{
+  uint32_t timeout=700000;
+  USART_SendData(USART1,dat);
+
+  while((USART_GetFlagStatus(USART1,USART_FLAG_TXE)==0)&&(timeout--));
+}
+/***************************************************************
+** 作者：田松召
+** 日期：2015.3.10
+** 版本：V1.0
+** 函数名: Uart1_SendData(u8 *datapt,u8 bytes)
+** 函数功能：串口1发送数据，采用中断的方式
+** 输入参数：  *datapt 指向发送数据buf的指针
+               bytes  发送字节数
+** 输出 ：1  返回值：
+	        2  改变的全局变量
+** 本函数调用的其它函数（版本号）：
+** 备注：
+** 修改日志： （作者，日期，修改内容及原因）
+***************************************************************/
+void Uart1_SendData(u8 *datapt,u8 bytes)
+{
+//	if(SY_Infor.PhoneCon_Stat == PHONE_CON_OK)
+//	{
+  for(; bytes>0; bytes--)
+  {
+    UART1SendByte(*datapt);
+    datapt++;
+  }
+
+//	}
+}
+
+/***************************************************************
+** 函数名称: UART3SendByte
+** 功能描述: 发送单字节
+** 输　  入:
+** 输　  出:
+** 作　  者: 张扬帆
+** 日　  期: 2016年06月20日
+***************************************************************/
+void UART3SendByte(uint8_t dat)
+{
+  uint32_t timeout=700000;
+  USART_SendData(USART3,dat);
+
+  while((USART_GetFlagStatus(USART3,USART_FLAG_TXE)==0)&&(timeout--));
+}
+/***************************************************************
+** 作者：田松召
+** 日期：2015.3.10
+** 版本：V1.0
+** 函数名: Uart3_SendData(u8 *datapt,u16 bytes)
+** 函数功能：串口3发送数据，采用中断的方式
+** 输入参数：  *datapt 指向发送数据buf的指针
+               bytes  发送字节数
+** 输出 ：1  返回值：
+	        2  改变的全局变量
+** 本函数调用的其它函数（版本号）：
+** 备注：
+** 修改日志： （作者，日期，修改内容及原因）
+***************************************************************/
+void Uart3_SendData(u8 *datapt,u16 bytes)
+{
+  for(; bytes>0; bytes--)
+  {
+    UART3SendByte(*datapt);
+    datapt++;
+  }
+}
+
+/***************************************************************
+** 作者：田松召
+** 日期：2016.2.26
+** 版本：V1.0
+** 函数名: Uart4_SendData(u8 *datapt,u8 bytes)
+** 函数功能：串口1发送数据，采用中断的方式
+** 输入参数：  *datapt 指向发送数据buf的指针
+               bytes  发送字节数
+** 输出 ：1  返回值：
+	        2  改变的全局变量
+** 本函数调用的其它函数（版本号）：
+** 备注：
+** 修改日志： （作者，日期，修改内容及原因）
+***************************************************************/
+void Uart4_SendData(u8 *datapt,u8 bytes)
+{
+  Uart4_Infor.TxPt = datapt;
+  Uart4_Infor.TxNum = bytes;
+  Uart4_Infor.TxCnt = 0;
+  Uart4_Infor.TxStat=U4_Tx_ing;
+  Uart4_Infor.TxCnt++;
+  USART_SendData(UART4,*Uart4_Infor.TxPt++);
+}
+
+/***************************************************************
+** 作者：田松召
+** 日期：2016.2.26
+** 版本：V1.0
+** 函数名: Uart5_SendData(u8 *datapt,u8 bytes)
+** 函数功能：串口5发送数据，采用中断的方式
+** 输入参数：  *datapt 指向发送数据buf的指针
+               bytes  发送字节数
+** 输出 ：1  返回值：
+	        2  改变的全局变量
+** 本函数调用的其它函数（版本号）：
+** 备注：
+** 修改日志： （作者，日期，修改内容及原因）
+***************************************************************/
+void UART5SendByte(uint8_t dat)
+{
+  uint32_t timeout=700000;
+  USART_SendData(UART5,dat);
+
+  while((USART_GetFlagStatus(UART5,USART_FLAG_TXE)==0)&&(timeout--));
+}
+void Uart5_SendData(u8 *datapt,u8 bytes)
+{
+  for(; bytes>0; bytes--)
+  {
+    UART5SendByte(*datapt);
+    datapt++;
+  }
+}
+
+/***************************************************************
+** 作者：田松召
+** 日期：2015.3.10
+** 版本：V1.0
+** 函数名: USART1_IRQHandler(void)
+** 函数功能：串口1中断服务程序，发送中断和接收中断
+** 输入参数：
+** 输出 ：1  返回值：
+	        2  改变的全局变量
+** 本函数调用的其它函数（版本号）：
+** 备注：
+** 修改日志： （作者，日期，修改内容及原因）
+***************************************************************/
+void Uart1RxbufClr(void)//张扬帆20160421
+{
+  uint8_t i;
+
+  for(i=0; i<U1_RxMaxSize; i++)
+    Uart1_Infor.RxBuf[i] = 0;
+}
+
+void USART1_IRQHandler(void)                	//串口1中断服务程序
+{
+  u16 i,temp;
+
+  if(USART_GetITStatus(USART1, USART_IT_RXNE) != RESET)
+  {
+    USART_ClearITPendingBit(USART1,USART_IT_RXNE);
+    Uart1_Infor.RxBuf[Uart1_Infor.RxCnt++] =USART_ReceiveData(USART1);
+//
+//		if(Uart1_Infor.RxBuf[0] == 0x55)
+//		{
+//			if((SY_Infor.SysMode == DOWN_MODE)&&(Uart1_Infor.RxBuf[1]==0x01)&&(Uart1_Infor.RxBuf[2]==0x03)&&(Uart1_Infor.RxBuf[3]==0x02))
+//			{
+//				if(Uart1_Infor.RxCnt==(UPDATE_DATA_LEN+6)&&Uart1_Infor.RxBuf[UPDATE_DATA_LEN+5]==0xaa)
+//				{
+//					Uart1_Infor.RxCnt = 0;
+//					Uart1_Infor.RxNum = 0;
+//					if(XOR_Check(Uart1_Infor.RxBuf,UPDATE_DATA_LEN+4)!=Uart1_Infor.RxBuf[UPDATE_DATA_LEN+4])
+//					{
+//						return ;
+//					}
+//
+//					if(SY_Infor.GroupDataLength == 0)	SY_Infor.UpdataStat = UpdataStat_DataLengthOverFlow;
+//					else															SY_Infor.GroupDataStat=GroupDataStat_DataSelf;
+
+//					#ifdef Encryption
+//					for(i=0;i<UPDATE_DATA_LEN;i++)
+//					{
+//						temp = Uart1_Infor.RxBuf[4+i] &0x0f;
+//						Uart1_Infor.RxBuf[4+i] &= 0xf0;
+//						switch(temp)
+//						{
+//						case 0x00:Uart1_Infor.RxBuf[4+i] |= 0x07;break;
+//						case 0x01:Uart1_Infor.RxBuf[4+i] |= 0x05;break;
+//						case 0x02:Uart1_Infor.RxBuf[4+i] |= 0x00;break;
+//						case 0x03:Uart1_Infor.RxBuf[4+i] |= 0x0C;break;
+//						case 0x04:Uart1_Infor.RxBuf[4+i] |= 0x0A;break;
+//						case 0x05:Uart1_Infor.RxBuf[4+i] |= 0x0B;break;
+//						case 0x06:Uart1_Infor.RxBuf[4+i] |= 0x0D;break;
+//						case 0x07:Uart1_Infor.RxBuf[4+i] |= 0x01;break;
+//						case 0x08:Uart1_Infor.RxBuf[4+i] |= 0x06;break;
+//						case 0x09:Uart1_Infor.RxBuf[4+i] |= 0x0E;break;
+//						case 0x0A:Uart1_Infor.RxBuf[4+i] |= 0x04;break;
+//						case 0x0B:Uart1_Infor.RxBuf[4+i] |= 0x03;break;
+//						case 0x0C:Uart1_Infor.RxBuf[4+i] |= 0x08;break;
+//						case 0x0D:Uart1_Infor.RxBuf[4+i] |= 0x0F;break;
+//						case 0x0E:Uart1_Infor.RxBuf[4+i] |= 0x09;break;
+//						case 0x0F:Uart1_Infor.RxBuf[4+i] |= 0x02;break;
+//						}
+//						temp = Uart1_Infor.RxBuf[4+i]>>4;
+//						Uart1_Infor.RxBuf[4+i] &= 0x0f;
+//						switch(temp)
+//						{
+//						case 0x00:Uart1_Infor.RxBuf[4+i] |= 0x70;break;
+//						case 0x01:Uart1_Infor.RxBuf[4+i] |= 0x50;break;
+//						case 0x02:Uart1_Infor.RxBuf[4+i] |= 0x00;break;
+//						case 0x03:Uart1_Infor.RxBuf[4+i] |= 0xC0;break;
+//						case 0x04:Uart1_Infor.RxBuf[4+i] |= 0xA0;break;
+//						case 0x05:Uart1_Infor.RxBuf[4+i] |= 0xB0;break;
+//						case 0x06:Uart1_Infor.RxBuf[4+i] |= 0xD0;break;
+//						case 0x07:Uart1_Infor.RxBuf[4+i] |= 0x10;break;
+//						case 0x08:Uart1_Infor.RxBuf[4+i] |= 0x60;break;
+//						case 0x09:Uart1_Infor.RxBuf[4+i] |= 0xE0;break;
+//						case 0x0A:Uart1_Infor.RxBuf[4+i] |= 0x40;break;
+//						case 0x0B:Uart1_Infor.RxBuf[4+i] |= 0x30;break;
+//						case 0x0C:Uart1_Infor.RxBuf[4+i] |= 0x80;break;
+//						case 0x0D:Uart1_Infor.RxBuf[4+i] |= 0xF0;break;
+//						case 0x0E:Uart1_Infor.RxBuf[4+i] |= 0x90;break;
+//						case 0x0F:Uart1_Infor.RxBuf[4+i] |= 0x20;break;
+//						}
+//					}
+//					#endif
+//					if(SY_Infor.GroupDataLength<UPDATE_DATA_LEN)
+//					{
+//						for(i=0;i<SY_Infor.GroupDataLength;i++)
+//						{
+//							p_buffer.buffer8[SY_Infor.GroupDataPt+i] = Uart1_Infor.RxBuf[4+i];
+//						}
+//						SY_Infor.GroupDataPt += SY_Infor.GroupDataLength;
+//						SY_Infor.GroupDataLength = 0;
+//						SY_Infor.GroupData_PageFullFlag = PageFullFlag_Finish;
+//					}
+//					else
+//					{
+//						for(i=0;i<UPDATE_DATA_LEN;i++)
+//						{
+//							p_buffer.buffer8[SY_Infor.GroupDataPt+i] = Uart1_Infor.RxBuf[4+i];
+//						}
+//						SY_Infor.GroupDataPt +=UPDATE_DATA_LEN;
+//						SY_Infor.GroupDataLength = SY_Infor.GroupDataLength - UPDATE_DATA_LEN;
+//						if(SY_Infor.GroupDataPt>=256)
+//						{
+//							SY_Infor.GroupData_PageFullFlag = PageFullFlag_Ing;
+//							SY_Infor.GroupData_PageFullCnt++;
+//							SY_Infor.GroupData_PageFullBeyond = SY_Infor.GroupDataPt - 256;
+//						}
+//						else if(SY_Infor.GroupDataLength==0)
+//						{
+//							SY_Infor.GroupData_PageFullFlag = PageFullFlag_Finish;
+//						}
+//					}
+//					SY_Infor.GroupDataStat=GroupDataStat_DataSelf;
+//				}else
+//				if(Uart1_Infor.RxCnt > UPDATE_DATA_LEN+6)
+//				{
+//					Uart1_Infor.RxCnt = 0;
+//					Uart1_Infor.RxNum = 0;
+//				}
+//			}else
+//			if((Uart1_Infor.RxCnt == 20)&&(Uart1_Infor.RxBuf[19]==0xaa))
+//			{
+//				Uart1_Infor.RxNum = 0;
+//				Uart1_Infor.RxCnt = 0;
+//				if(XOR_Check(Uart1_Infor.RxBuf,18)!=Uart1_Infor.RxBuf[18])
+//				{
+//					return ;
+//				}
+//				if(Uart1_Infor.RxBuf[1]==0x01)  //公共报文
+//				{
+//					if(Uart1_Infor.RxBuf[2]==0x01)   //连接报文
+//					{
+//						SY_Infor.ConnectDataOk = 1;  //王红彬   20160608
+//						SY_Infor.PhoneCon_Stat = PHONE_CON_OK;
+//					}
+//					else if(Uart1_Infor.RxBuf[2]==0x05)  // 程序模式     20160426有修改
+//					{
+//						if((Uart1_Infor.RxBuf[4]==0x0A)||(Uart1_Infor.RxBuf[4]==0x0B)) //张扬帆20160606
+//						{
+//							card_set_flag = Uart1_Infor.RxBuf[4];
+//							Balance_Infor.Mode = Uart1_Infor.RxBuf[4]-5;   //卡牌模式也需要发送到平衡,可能会用摇杆,张扬帆20160613
+//							Balance_Infor.ModeFlag=1;
+//							Sys_Logic_State = LOGIC_CARD_DISPOSE; //切换到卡牌创建
+//							if(card_set_flag==0x0A)      card_run_flag = 1; //一般卡牌
+//							else if(card_set_flag==0x0B) card_run_flag = 0; //模板卡牌
+//						}
+//						else if((Uart1_Infor.RxBuf[4]==0x0C)&&(Sys_Logic_State == LOGIC_CARD_RUN)) //张扬帆20160606
+//						{
+//							SY_Infor.MessageObj = MsgOBJ_NO;
+//							casd_update_flag = 1;
+//							Sys_Logic_State = LOGIC_CARD_UPDATA;
+//						}
+//						else if((Uart1_Infor.RxBuf[4]==0x07)||(Uart1_Infor.RxBuf[4]==0x08)||(Uart1_Infor.RxBuf[4]==0x09))
+//						{//摇杆、轨迹、陀螺仪
+//							Balance_Infor.Mode = Uart1_Infor.RxBuf[4]-5;
+//							Balance_Infor.ModeFlag=1;
+//						}
+//						else
+//						{
+//							Balance_Infor.Mode = 0; //退出摇杆、轨迹、陀螺仪界面
+//							SY_Infor.SysMode = Uart1_Infor.RxBuf[4];
+//							if(SY_Infor.SysMode != RUN_MODE)
+//							{
+//								Sys_Logic_State = LOGIC_CARD_DISPOSE;
+//							}
+//							if(SY_Infor.SysMode == DOWN_MODE)     //王红彬新加   20160428
+//							{
+//								SY_Infor.GroupDataStat = YES;
+//							}
+//						}
+//					}
+//					else if(Uart1_Infor.RxBuf[2]==0x03)    //数据
+//					{
+//						if(Uart1_Infor.RxBuf[3]==0x04)  //查询更新
+//						{
+//							SY_Infor.GroupData_QueryFlag = YES;
+//							SY_Infor.GroupData_QueryType = Uart1_Infor.RxBuf[4];
+//							SY_Infor.GroupData_QueryObj = Uart1_Infor.RxBuf[5];
+//							SY_Infor.GroupData_QuerySn = Uart1_Infor.RxBuf[6];
+//							SY_Infor.GroupData_QueryVersion = (Uart1_Infor.RxBuf[7]<<24) + (Uart1_Infor.RxBuf[8]<<16)+(Uart1_Infor.RxBuf[9]<<8)+Uart1_Infor.RxBuf[10];
+//						}
+//						else if(Uart1_Infor.RxBuf[3]==0x00)  //数据开始
+//						{
+//							SY_Infor.GroupDataStat = GroupDataStat_Preprocess;
+//							SY_Infor.GroupDataLength = (Uart1_Infor.RxBuf[8]<<24) + (Uart1_Infor.RxBuf[9]<<16) + (Uart1_Infor.RxBuf[10]<<8) + Uart1_Infor.RxBuf[11];
+//							SY_Infor.FirmLength = SY_Infor.GroupDataLength;
+//							SY_Infor.GroupDataPt = 0;
+//							SY_Infor.GroupData_PageFullFlag = 0;
+//							SY_Infor.GroupData_PageFullCnt = 0;
+//							SY_Infor.GroupData_PageFullBeyond = 0;
+//							for(i=0;i<14;i++)    //anlingna 20161228
+//							{
+//								SY_Infor.UpdateMessage[i] = Uart1_Infor.RxBuf[4+i];
+//							}
+//							if(SY_Infor.GroupDataLength >= 0x3ffff)    //王红彬    20160518
+//							{
+//								SY_Infor.UpdataStat = UpdataStat_DataLengthOverFlow;
+//								SY_Infor.GroupDataStat = GroupDataStat_NO;   //王红彬   20160620
+//							}
+//							SY_Infor.GroupType = Uart1_Infor.RxBuf[4];
+//							if(Uart1_Infor.RxBuf[4]==0x01)  //报文
+//							{
+//								if(Uart1_Infor.RxBuf[5]==0x05)  //注册表报文  开始数据   王红彬20160614 正确的报文
+//								{
+//									SY_Infor.GroupDataStat = GroupDataStat_NO;   //王红彬20160615
+//									SY_Infor.MessageObj = MsgOBJ_RegVirSensor;
+//									SensorReg_Infor.Edit_GroupDataStat = DataPreStart;    //20160517 王红彬加
+//									SY_Infor.MessageNum = (Uart1_Infor.RxBuf[8]<<24) + (Uart1_Infor.RxBuf[9]<<16) + (Uart1_Infor.RxBuf[10]<<8) + Uart1_Infor.RxBuf[11];
+//									if(Uart1_Infor.RxBuf[6]==0x00)
+//									{
+//										SensorReg_Infor.NewOrDelete = NEW;
+//									}
+//									else if(Uart1_Infor.RxBuf[6]==0x03)
+//									{
+//										SensorReg_Infor.NewOrDelete = DELETE;
+//									}
+//								}
+//								else if((Uart1_Infor.RxBuf[5]==0x02)&&(Uart1_Infor.RxBuf[6]==0x07)) //卡牌的更新开始报文
+//								{
+//									if(SY_Infor.MessageObj==MsgOBJ_NO)
+//									{
+//										SY_Infor.MessageObj = MsgOBJ_CardUpdata;
+//										SY_Infor.MessageNum = (Uart1_Infor.RxBuf[8]<<24) + (Uart1_Infor.RxBuf[9]<<16) + (Uart1_Infor.RxBuf[10]<<8) + Uart1_Infor.RxBuf[11];
+//										//张扬帆,限制卡牌指令数
+//										if(SY_Infor.MessageNum>CARD_CMD_NUMS)
+//										{
+//
+//										}else
+//										{
+//											Card_Infor.CommandCnt = 0;	//清零卡牌计数器,防止连续更新卡牌,计数值不断增大,张扬帆20160513
+//											SY_Infor.GroupDataStat = GroupDataStat_YES;	//置标志,发送请求空报文,张扬帆添加
+//										}
+//									}
+//								}
+//								else if((Uart1_Infor.RxBuf[5]==0x02)&&(Uart1_Infor.RxBuf[6]==0x08)) //工作传感器
+//								{
+//									if(SY_Infor.MessageObj==MsgOBJ_NO)
+//									{
+//										SY_Infor.MessageObj = MsgOBJ_WorkSensor;
+//										SY_Infor.MessageNum = (Uart1_Infor.RxBuf[8]<<24) + (Uart1_Infor.RxBuf[9]<<16) + (Uart1_Infor.RxBuf[10]<<8) + Uart1_Infor.RxBuf[11];
+//										if(SY_Infor.MessageNum==0)
+//										{
+//											WorkSensor_Infor.ExistFlag = NO;
+//											STMFLASH_Write(WORKSENSOR_ADD,&WorkSensor_Infor.ExistFlag,1);
+//											WorkSensor_Infor.Num = 0;
+//											STMFLASH_Write(WORKSENSOR_ADD+2,&WorkSensor_Infor.Num,1);
+//										}
+//										//张扬帆,限制工作传感器数目
+//										if(SY_Infor.MessageNum>WK_SENSOR_MaxNum)
+//										{
+//
+//										}else
+//										{
+//											WorkSensor_Infor.Num = 0;
+//											SY_Infor.GroupDataStat = GroupDataStat_YES;	//置标志,发送请求空报文,张扬帆添加
+//										}
+//									}
+//								}
+//							}
+//							else if(Uart1_Infor.RxBuf[4]==0x02) //文件
+//							{
+//								SY_Infor.FileType = Uart1_Infor.RxBuf[5];
+//								SY_Infor.FileObj = Uart1_Infor.RxBuf[6];
+//								SY_Infor.FileSn = Uart1_Infor.RxBuf[7];
+//							}
+//						}
+//						else if(Uart1_Infor.RxBuf[3]==0x01)  //结束数据
+//						{
+//							SY_Infor.GroupDataStat = GroupDataStat_Finish;
+//							if(Uart1_Infor.RxBuf[4]==0x01)  //报文
+//							{
+//								if(Uart1_Infor.RxBuf[5]==0x05)  //注册用虚拟传感器报文结束   王红彬20160614 正确的报文
+//								{
+//									SY_Infor.MessageObj = MsgOBJ_RegVirSensor;
+//									if(Uart1_Infor.RxBuf[6]==0x00)
+//									{
+//										SensorReg_Infor.NewOrDelete = NEW;
+//									}
+//									else if(Uart1_Infor.RxBuf[6]==0x03)
+//									{
+//										SensorReg_Infor.NewOrDelete = DELETE;
+//									}
+//								}
+//								else if((Uart1_Infor.RxBuf[5]==0x05)&&(Uart1_Infor.RxBuf[6]==0x01))
+//								{
+//									SY_Infor.MessageObj = NO;
+//								}
+//								else if((Uart1_Infor.RxBuf[5]==0x02)&&(Uart1_Infor.RxBuf[6]==0x07))
+//								{
+//									SY_Infor.MessageObj = MsgOBJ_NO;
+//									SY_Infor.GroupDataStat = GroupDataStat_YES;
+//									card_run_flag = 1;//运行一般卡牌,张扬帆20160606
+//									card_set_flag = 0x0A;//一般卡牌
+//								}
+//								else if((Uart1_Infor.RxBuf[5]==0x02)&&(Uart1_Infor.RxBuf[6]==0x08))
+//								{
+//									SY_Infor.MessageObj = MsgOBJ_NO;
+//									Sys_Logic_State = LOGIC_CARD_DISPOSE;//先传卡牌指令,再传工作传感器指令,两者必须先后一起发送,张扬帆
+//									Card_Infor.update_end = 1;
+//								}
+//							}
+//							else if(Uart1_Infor.RxBuf[4]==0x02) //文件
+//							{
+//								SY_Infor.FileType = Uart1_Infor.RxBuf[5];   //王红彬  20160819
+//								SY_Infor.FileObj = Uart1_Infor.RxBuf[6];
+//								SY_Infor.FileSn = Uart1_Infor.RxBuf[7];
+//							}
+//						}
+//					}
+//				}
+//				else if(Uart1_Infor.RxBuf[1]==0x02)  // 运行报文
+//				{
+//					if(Uart1_Infor.RxBuf[2]==0x02)
+//					{
+//						if(Uart1_Infor.RxBuf[3]==0x00)  //遥控
+//						{
+//							Balance_Infor.Speed = Uart1_Infor.RxBuf[4];
+//							Balance_Infor.dynamics = Uart1_Infor.RxBuf[5]*256 + Uart1_Infor.RxBuf[6];
+//							Balance_Infor.Angle = Uart1_Infor.RxBuf[7]*256 + Uart1_Infor.RxBuf[8];
+//
+//							if((Balance_Infor.Speed!=Balance_Infor.OldSpeed)||(Balance_Infor.dynamics!=Balance_Infor.Olddynamics)||
+//								 (Balance_Infor.Angle!=Balance_Infor.OldAngle) )
+//							{
+//
+//								Balance_Infor.OldSpeed = Balance_Infor.Speed;
+//								Balance_Infor.Olddynamics = Balance_Infor.dynamics;
+//								Balance_Infor.OldAngle = Balance_Infor.Angle;
+//
+//								Balance_Infor.BasicFlag = Blance_SendStart;
+//							}
+//						}
+//						else if(Uart1_Infor.RxBuf[3]==0x02)  //语音库号
+//						{
+//							LY_Infor.SendFlag = LY_MCU_Send_Start;
+//							LY_Infor.Mode = 1;
+//							LY_Infor.VoiceNum = Uart1_Infor.RxBuf[4];
+//						}
+//						else if(Uart1_Infor.RxBuf[3]==0x03)  //动作库号
+//						{
+//							Balance_Infor.LibraryFlag = Blance_SendStart;
+//							Balance_Infor.LibraryNum = Uart1_Infor.RxBuf[4];
+//						}
+//						else if(Uart1_Infor.RxBuf[3]==0x04)  //单电机角度控制
+//						{
+//							Balance_Infor.MotorId    = Uart1_Infor.RxBuf[4];
+//							Balance_Infor.MotorSpd   = Uart1_Infor.RxBuf[5];
+//							Balance_Infor.MotorAngleH= Uart1_Infor.RxBuf[6];
+//							Balance_Infor.MotorAngleL= Uart1_Infor.RxBuf[7];
+//							Balance_Infor.CmdFlag   |= RX_CMD_MOTOR;
+//						}
+//					}
+//					else if(Uart1_Infor.RxBuf[2]==0x03)
+//					{
+//						if(Uart1_Infor.RxBuf[3]==0x00)//音量
+//						{
+//							LY_Infor.SendFlag = LY_MCU_Send_Start;
+//							LY_Infor.Mode = 4;
+//							LY_Infor.Volume = Uart1_Infor.RxBuf[4];
+//						}
+//						else if(Uart1_Infor.RxBuf[3]==0x01)//自动关机时间
+//						{
+//							rx_cmd_flag|=RX_CMD_PWROFF_TIME;
+//							Pmu_Infor.power_off_time = Uart1_Infor.RxBuf[4]*256+Uart1_Infor.RxBuf[5];
+//							if(Pmu_Infor.power_off_time>30000)  Pmu_Infor.power_off_time = 30000;
+//						}
+//						else if(Uart1_Infor.RxBuf[3]==0x02)//是否脱机运行卡牌
+//						{
+//							card_appoff_flag = Uart1_Infor.RxBuf[4];
+//							Card_Infor.rx_flag |= card_rx_appoff;
+//							rx_cmd_flag |= RX_CMD_SET;
+//						}
+//					}
+//					else if(Uart1_Infor.RxBuf[2]==0x04)  //开关
+//					{
+//						if(Uart1_Infor.RxBuf[3]==0x00)  //语音识别开关
+//						{
+//							LY_Infor.SendFlag = LY_MCU_Send_Start;
+//							if(Uart1_Infor.RxBuf[4]==1)				//关闭语音识别,张扬帆20160506
+//								LY_Infor.Mode = 3;
+//							else if(Uart1_Infor.RxBuf[4]==0)		//开启语音识别,张扬帆20160506
+//								LY_Infor.Mode = 2;
+//						}
+//						else if(Uart1_Infor.RxBuf[3]==0x01)  //手势识别
+//						{
+//							SensorReg_Infor.GestureRecognitionNewStat = Uart1_Infor.RxBuf[4];
+//							if(SensorReg_Infor.GestureRecognitionNewStat!=SensorReg_Infor.GestureRecognitionOldStat)
+//							{
+//								SensorReg_Infor.GestureRecognitionOldStat=SensorReg_Infor.GestureRecognitionNewStat;
+//							}
+//						}
+//						else if(Uart1_Infor.RxBuf[3]==0x02) //rgb模式
+//						{
+//							run_sensor.rgb_mode = Uart1_Infor.RxBuf[4]&0x01;
+//							rx_cmd_flag |= RX_CMD_RGB_MODE;
+//							rx_cmd_flag |= RX_CMD_SET;
+//						}
+//					}
+//					else if(Uart1_Infor.RxBuf[2]==0x05)  //选择模式：平衡车，越野车，其它
+//					{
+//						if(Uart1_Infor.RxBuf[3]==0x01)
+//						{
+//							SY_Infor.SysForm = Uart1_Infor.RxBuf[4];
+//							rx_cmd_flag|=RX_CMD_FORM;
+//							rx_cmd_flag |= RX_CMD_SET;
+//						}
+//						else if(Uart1_Infor.RxBuf[3]==0x02)
+//						{
+//							if(Uart1_Infor.RxBuf[4]==0x01)  //恢复出厂设置
+//							{
+//								temp = STMFLASH_ReadHalfWord(TemplateBackups_Save_Addr+2);
+//								STMFLASH_Read(TemplateBackups_Save_Addr,p_buffer.buffer16,(temp+2));
+
+//								STMFLASH_Write(TEMPLATECARD_SAVE_ADDR,p_buffer.buffer16,(temp+2));
+//								i = 0xffff;
+//								STMFLASH_Write(CARD_SAVE_ADDR,&i,1);
+//								FLASH_ErasePage(SENSOR_REG_ADDR);
+//								Pmu_Infor.ResetFlag = 1;
+//								Balance_Infor.Mode = 8;
+//								Balance_Infor.ModeFlag=1;
+//							}
+//							else if(Uart1_Infor.RxBuf[4]==0x02) //充电时系统运行
+//							{
+//								Pmu_Infor.peripheral_limit = peripheral_limit_ON;
+//							}
+//							else if(Uart1_Infor.RxBuf[4]==0x03)
+//							{
+//								Pmu_Infor.peripheral_limit = peripheral_limit_OFF;
+//							}
+//						}
+//						else if(Uart1_Infor.RxBuf[3]==0x03) //假升级
+//						{
+//							for(i=0;i<14;i++)
+//							{
+//								Uart5_Infor.TxBuf[5+i] = Uart1_Infor.RxBuf[4+i];
+//							}
+//						}
+//						else if(Uart1_Infor.RxBuf[3]==0x04)
+//						{
+//							Pmu_Infor.fase_updata_Flag = YES;
+//							for(i=0;i<9;i++)
+//							{
+//								Uart5_Infor.TxBuf[19+i] = Uart1_Infor.RxBuf[4+i];
+//							}
+//						}
+//					}
+//					else if(Uart1_Infor.RxBuf[2]==0x06)
+//					{
+//						if(Uart1_Infor.RxBuf[3]==0x00)
+//						{
+//							if(Uart1_Infor.RxBuf[4]<WK_SENSOR_MaxNum)//虚拟传感器状态
+//							{
+//								temp = SearchWorkSensor(Uart1_Infor.RxBuf[4]); //通过注册号查找传感器,张扬帆20160701
+//								if(temp!=255)
+//								{
+//									WorkSensor_Infor.Buf[temp][3] = Uart1_Infor.RxBuf[5];
+//									WorkSensor_Infor.Buf[temp][4] = Uart1_Infor.RxBuf[6];
+//									WorkSensor_Infor.Buf[temp][5] = Uart1_Infor.RxBuf[7];
+//									WorkSensor_Infor.Buf[temp][6] = Uart1_Infor.RxBuf[8];
+//									WorkSensor_Infor.Buf[temp][7] = Uart1_Infor.RxBuf[9];
+//									WorkSensor_Infor.Buf[temp][8] = Uart1_Infor.RxBuf[10];
+//								}
+//							}
+//						}
+//						else if(Uart1_Infor.RxBuf[3]==0x01)
+//						{
+//							if(Uart1_Infor.RxBuf[4]==200)
+//							{
+//								Card_Infor.rx_type  = Uart1_Infor.RxBuf[5];
+//								Card_Infor.rx_id    = Uart1_Infor.RxBuf[6];
+//								Card_Infor.rx_flag |= card_rx_vari;
+//							}else
+//							if(Uart1_Infor.RxBuf[4]<40)
+//							{
+//								run_sensor.reg_num = Uart1_Infor.RxBuf[4];
+//								run_sensor.sub_index = Uart1_Infor.RxBuf[5];
+//								run_sensor.cmd_data = Uart1_Infor.RxBuf[6];
+//								run_sensor.flash = Uart1_Infor.RxBuf[7];
+//								run_sensor.cmd_flag |= REG_SENSOR_DATA_FLAG;
+//							}
+//						}
+//						else if(Uart1_Infor.RxBuf[3]==0x03)
+//						{
+//							if(Uart1_Infor.RxBuf[4]==0x01)
+//							{
+//								memcpy(p_buffer.buffer8,&Uart1_Infor.RxBuf,20);
+//								rx_cmd_flag |= RX_CMD_SENSOR;
+//							}
+//						}
+//					}
+//					else if((Uart1_Infor.RxBuf[2]==0x07)&&(Sys_Logic_State == LOGIC_CARD_UPDATA))  //卡牌
+//					{
+//						for(i=0;i<CardCommandByteS;i++)				//获取单字节指令,张扬帆20160429
+//						{
+//							card_rx_buffer[i] = Uart1_Infor.RxBuf[i+4];		//跳转到报文中的卡牌指令内容,张扬帆
+//						}
+//						Card_Infor.UpdataFlag = CARD_WRITE_START;
+//					}
+//					else if((Uart1_Infor.RxBuf[2]==0x08)&&(Sys_Logic_State == LOGIC_CARD_UPDATA))  //对应卡牌的工作传感器
+//					{
+//						for(i=0;i<SENSOR_WORK_INFOR_BYTES;i++)				//获取单字节指令,张扬帆20160429
+//						{
+//							card_rx_buffer[i] = Uart1_Infor.RxBuf[i+4];		//跳转到报文中的卡牌指令内容,张扬帆
+//						}
+//						WorkSensor_Infor.UpdataFlag = PhysicsSensor_START;
+//					}
+//				}
+//				else if(Uart1_Infor.RxBuf[1]==0x03)
+//				{
+//					if(Uart1_Infor.RxBuf[2]==0x00)
+//					{
+//						switch(Uart1_Infor.RxBuf[3])
+//						{
+//						case 0x01:
+//							Balance_Infor.CmdFlag|=RX_CMD_APP_PID;
+//						break;
+//						case 0x03:
+//							Balance_Infor.pid_ap[0] = Uart1_Infor.RxBuf[4];
+//							Balance_Infor.pid_ap[1] = Uart1_Infor.RxBuf[5];
+//							Balance_Infor.pid_ap[2] = Uart1_Infor.RxBuf[6];
+//							Balance_Infor.CmdFlag|=RX_CMD_APP_AP;
+//						break;
+//						case 0x04:
+//							Balance_Infor.pid_ad[0] = Uart1_Infor.RxBuf[5];
+//							Balance_Infor.pid_ad[1] = Uart1_Infor.RxBuf[6];
+//							Balance_Infor.CmdFlag|=RX_CMD_APP_AD;
+//						break;
+//						case 0x05:
+//							Balance_Infor.pid_sp[0] = Uart1_Infor.RxBuf[4];
+//							Balance_Infor.pid_sp[1] = Uart1_Infor.RxBuf[5];
+//							Balance_Infor.pid_sp[2] = Uart1_Infor.RxBuf[6];
+//							Balance_Infor.CmdFlag|=RX_CMD_APP_SP;
+//						break;
+//						case 0x06:
+//							Balance_Infor.pid_si[0] = Uart1_Infor.RxBuf[5];
+//							Balance_Infor.pid_si[1] = Uart1_Infor.RxBuf[6];
+//							Balance_Infor.CmdFlag|=RX_CMD_APP_SI;
+//						break;
+//						case 0x07:
+//							if(Uart1_Infor.RxBuf[4]==0x01) Balance_Infor.CmdFlag|=RX_CMD_APP_PID_SAVE;
+//							else if(Uart1_Infor.RxBuf[4]==0x02) Balance_Infor.CmdFlag|=RX_CMD_APP_PID_RESET;
+//						break;
+//						case 0x09:
+//							Balance_Infor.pid_angle[0] = Uart1_Infor.RxBuf[5];
+//							Balance_Infor.pid_angle[1] = Uart1_Infor.RxBuf[6];
+//							Balance_Infor.CmdFlag|=RX_CMD_APP_ANGLE;
+//						break;
+//						case 0x0A:
+//							Balance_Infor.pid_speed = Uart1_Infor.RxBuf[6];
+//							Balance_Infor.CmdFlag|=RX_CMD_APP_SPEED;
+//						break;
+//						}
+//					}else
+//					if(Uart1_Infor.RxBuf[2]==0x01)
+//					{
+//						if(Uart1_Infor.RxBuf[3]==0x00)
+//						{
+//							voice.cmd_data = Uart1_Infor.RxBuf[4];
+//							voice.tm = Uart1_Infor.RxBuf[5];
+//							voice.cmd_flag |= CMD_REC_FLAG;
+//						}else
+//						if(Uart1_Infor.RxBuf[3]==0x01)
+//						{
+//							voice.ch_tone = Uart1_Infor.RxBuf[4];
+//							voice.pitch   = Uart1_Infor.RxBuf[5];
+//							voice.strength= Uart1_Infor.RxBuf[6];
+//							voice.tm      = (Uart1_Infor.RxBuf[7]<<8)+Uart1_Infor.RxBuf[8];
+//							voice.cmd_flag |= CMD_MIDI_FLAG;
+//						}else
+//						if(Uart1_Infor.RxBuf[3]==0x02)
+//						{
+//							voice.cmd_flag |= CMD_MIDI_ON_FLAG;
+//						}
+//						else
+//						if(Uart1_Infor.RxBuf[3]==0x03)
+//						{
+//							voice.cmd_flag |= CMD_MIDI_OFF_FLAG;
+//						}
+//					}else
+//					if(Uart1_Infor.RxBuf[2]==0x02)
+//					{
+//						if(Uart1_Infor.RxBuf[3]==0x01)
+//						{
+//							Balance_Infor.CmdFlag|=RX_CMD_APP_AUTOB;
+//						}
+//					}
+//					#ifdef CC2CC
+//					else if(Uart1_Infor.RxBuf[2]==0x03&&Uart1_Infor.RxBuf[3]==0x00&&Uart1_Infor.RxBuf[4]==0x00)
+//					{
+//						if(Uart1_Infor.RxBuf[5]==0x01)	//开启从机模式
+//						{
+//							p_buffer.buffer16[0] = CC_CMD_MODE_FLAG;
+//							if(STMFLASH_ReadHalfWord(CC_SLAVE_EN_ADDR)!=CC_CMD_MODE_FLAG)
+//							{
+//								STMFLASH_Write(CC_SLAVE_EN_ADDR,&p_buffer.buffer16[0],1);
+//							}
+//							cc_rf.cmd_flag |= CC_CMD_MODE_FLAG;
+//							rx_cmd_flag |= RX_CMD_SET;
+//							cc_rf.cmd_flag |= CC_CMD_MODE_SET;
+//						}else
+//						if(Uart1_Infor.RxBuf[5]==0x02)	//关闭从机模式,并删除注册信息
+//						{
+//							cc_rf.channel = Common_Channel;
+//							p_buffer.buffer16[0] = cc_rf.channel;
+//							if(STMFLASH_ReadHalfWord(CC_REG_CHANNEL_ADDR)!=cc_rf.channel)
+//							{
+//								STMFLASH_Write(CC_REG_CHANNEL_ADDR,&p_buffer.buffer16[0],1);
+//							}
+//
+//							p_buffer.buffer16[0] = 0;
+//							if(STMFLASH_ReadHalfWord(CC_SLAVE_EN_ADDR)!=CC_CMD_MODE_FLAG)
+//							{
+//								STMFLASH_Write(CC_SLAVE_EN_ADDR,&p_buffer.buffer16[0],1);
+//							}
+//							cc_rf.cmd_flag &=~CC_CMD_MODE_FLAG;
+//							rx_cmd_flag |= RX_CMD_SET;
+//							cc_rf.cmd_flag |= CC_CMD_MODE_SET;
+//						}
+//					}
+//					#endif
+//				}
+//				else if(Uart1_Infor.RxBuf[1]==0x05)  // 注册模式报文
+//				{
+//					if(Uart1_Infor.RxBuf[2]==0x01)  //重新注册
+//					{
+//						SensorReg_Infor.Edit_RestartReg_Stat=YES;
+//					}
+//					else if(Uart1_Infor.RxBuf[2]==0x02)  //添加新传感器
+//					{
+//						SensorReg_Infor.Edit_AddNewSensor_Stat=YES;
+//					}
+//					else if(Uart1_Infor.RxBuf[2]==0x00)  //编辑好的注册表
+//					{
+//						SY_Infor.GroupDataStat = GroupDataStat_YES;
+//						SensorReg_Infor.NewOrDelete = NEW;
+//					}
+//					else if(Uart1_Infor.RxBuf[2]==0x03)   //被删除的注册表  王红彬 20160620
+//					{
+//						SY_Infor.GroupDataStat = GroupDataStat_YES;
+//						SensorReg_Infor.NewOrDelete = DELETE;
+//					}
+//				}
+//				else if(Uart1_Infor.RxBuf[1]==0x06) //校准
+//				{
+//					if(Uart1_Infor.RxBuf[2]==0x00) //校准
+//					{
+//						Calibration_Infor.Obj = Uart1_Infor.RxBuf[4];
+//						Balance_Infor.axis_dir = Uart1_Infor.RxBuf[5];
+//						Balance_Infor.CmdFlag |= RX_CMD_APP_AXIS;
+//					}
+//
+//				}
+////				else if(Uart1_Infor.RxBuf[1]==0x08)  //调试报文
+////				{
+////					if(Uart1_Infor.RxBuf[2]==0x01)  //平衡
+////					{
+////						if(Uart1_Infor.RxBuf[3]==0x01)  //控制报文
+////						{
+////							Balance_Infor.DebugSendFlag=YES;
+////						}
+////					}
+////				}
+//			}
+//			else if(Uart1_Infor.RxCnt > 20)
+//			{
+//				Uart1_Infor.RxCnt = 0;
+//				Uart1_Infor.RxNum = 0;
+//			}
+//			Standby_Off();
+//		}
+//		else if(Uart1_Infor.RxBuf[0]=='O')
+//		{
+//			if(Uart1_Infor.RxBuf[1]=='K')
+//			{
+//				BLE_Infor.PhyConState=YES;
+//				Uart1_Infor.RxCnt = 0;
+//			}
+//			if(Uart1_Infor.RxCnt>2)  //田松召  2016.06.15
+//			{
+//				Uart1_Infor.RxCnt = 0;
+//				Uart1_Infor.RxNum = 0;
+//			}
+//		}
+//		else if(Uart1_Infor.RxBuf[0]=='B')//张扬帆20160421
+//		{//BLE_OFF
+//			if((Uart1_Infor.RxBuf[1]=='L')&&(Uart1_Infor.RxBuf[4]=='O')&&(Uart1_Infor.RxBuf[6]=='F'))
+//			{
+//				SY_Infor.PhoneCon_Stat = PHONE_CON_NO;
+//				ble_off_flag = 1;//张扬帆20160621
+//				SY_Infor.UpdataStat = UpdataStat_LoseConnect;
+//				Uart1_Infor.RxCnt = 0;
+//				Uart1_Infor.RxNum = 0;
+//				Uart1RxbufClr();
+//			}
+//			else if( (Uart1_Infor.RxBuf[1]=='L')&&(Uart1_Infor.RxBuf[2]=='E')&&(Uart1_Infor.RxBuf[6]=='d')&&(Uart1_Infor.RxBuf[7]=='e') )
+//			{//张扬帆20160921
+//				BLE_Infor.Bluetooth_Mode = BLE_MODE;
+//				Uart1RxbufClr();
+//			}
+//
+//			if(Uart1_Infor.RxCnt>8)  //田松召  2016.06.15
+//			{
+//				Uart1_Infor.RxCnt = 0;
+//				Uart1_Infor.RxNum = 0;
+//			}
+//		}
+//		/***蓝牙开线检模式**/
+//		else if(Uart1_Infor.RxBuf[0]==0x56) //	added  by Jundong
+//		{
+//			if((Uart1_Infor.RxCnt == 12)&&(Uart1_Infor.RxBuf[11]==0xaa))
+//			{
+//				if(XOR_Check(Uart1_Infor.RxBuf,10) == Uart1_Infor.RxBuf[10])
+//				{
+//					SY_Infor.SysMode = LINE_CHECK;
+//					SY_Infor.PhoneCon_Stat = PHONE_CON_OK;
+//					LineTest_Infor.Type = Uart1_Infor.RxBuf[1];
+//					LineTest_Infor.SysCommand = Uart1_Infor.RxBuf[2];
+//
+//					Uart1_Infor.RxCnt = 0;
+//					Uart1_Infor.RxNum = 0;
+//				}
+//
+//			}
+//		}
+//		else if(Uart1_Infor.RxBuf[0]==0x57)
+//		{
+//			if(Uart1_Infor.RxBuf[1]==0x01 && Uart1_Infor.RxBuf[2]==0x02 && Uart1_Infor.RxBuf[3]==0xaa)   //连接报文    王红彬   20160803
+//			{
+//				SY_Infor.ConnectDataOk = 1;  //王红彬   20160608
+//				SY_Infor.PhoneCon_Stat = PHONE_CON_OK;
+//				Uart1_Infor.RxCnt = 0;
+//				Uart1_Infor.RxNum = 0;
+//				Uart1RxbufClr();
+//			}
+//			if(Uart1_Infor.RxCnt>4)  //田松召
+//			{
+//				Uart1_Infor.RxCnt = 0;
+//				Uart1_Infor.RxNum = 0;
+//			}
+//		}
+//		else if(Uart1_Infor.RxBuf[0]=='R') //田松召 2016.07.04
+//		{
+//			if((Uart1_Infor.RxBuf[1]=='a')&&(Uart1_Infor.RxBuf[2]=='d')&&(Uart1_Infor.RxBuf[8]=='d')&&(Uart1_Infor.RxBuf[9]=='e'))
+//			{
+//				BLE_Infor.Bluetooth_Mode = Radio_MODE;
+//				Uart1RxbufClr();
+//			}
+//			if(Uart1_Infor.RxCnt>10)  //田松召
+//			{
+//				Uart1_Infor.RxCnt = 0;
+//				Uart1_Infor.RxNum = 0;
+//			}
+//		}
+//		else if(Uart1_Infor.RxBuf[0]=='P') //田松召 2016.07.04
+//		{
+//			if((Uart1_Infor.RxBuf[1]=='O')&&(Uart1_Infor.RxBuf[2]=='K'))
+//			{
+//				BLE_Infor.Radio_P_Stat = YES;
+//				Uart1RxbufClr();
+//			}
+//			if(Uart1_Infor.RxCnt>3)  //田松召  2016.06.15
+//			{
+//				Uart1_Infor.RxCnt = 0;
+//				Uart1_Infor.RxNum = 0;
+//			}
+//		}
+//		else if(Uart1_Infor.RxBuf[0]=='F') //田松召 2016.07.04
+//		{
+//			if((Uart1_Infor.RxBuf[1]=='O')&&(Uart1_Infor.RxBuf[2]=='K'))
+//			{
+//				BLE_Infor.Radio_F_Stat = YES;
+//				Uart1RxbufClr();
+//			}
+//			if(Uart1_Infor.RxCnt>3)  //田松召  2016.06.15
+//			{
+//				Uart1_Infor.RxCnt = 0;
+//				Uart1_Infor.RxNum = 0;
+//			}
+//		}
+//		else
+//		{
+//			Uart1_Infor.RxCnt = 0;
+//			Uart1_Infor.RxNum = 0;
+//		}
+  }
+}
+/***************************************************************
+** 作者：田松召
+** 日期：2015.3.10
+** 版本：V1.0
+** 函数名: USART3_IRQHandler(void)
+** 函数功能：串口3中断服务程序，发送中断和接收中断
+** 输入参数：
+** 输出 ：1  返回值：
+	        2  改变的全局变量
+** 本函数调用的其它函数（版本号）：
+** 备注：用于平衡
+** 修改日志： （作者，日期，修改内容及原因）
+***************************************************************/
+void USART3_IRQHandler(void)
+{
+//	u8 i;
+//  int32_t tmp_dat;
+//  if(USART_GetITStatus(USART3, USART_IT_RXNE) != RESET)  //接收中断
+//	{
+//		USART_ClearITPendingBit(USART3,USART_IT_RXNE); //张扬帆20160620
+//		Uart3_Infor.RxBuf[Uart3_Infor.RxCnt++] =USART_ReceiveData(USART3);//(USART1->DR);	//读取接收到的数据
+//		if(Uart3_Infor.RxBuf[0] == 0x55)
+//		{
+//			if(Uart3_Infor.RxCnt==2)
+//			{
+//				Uart3_Infor.RxNum = Uart3_Infor.RxBuf[1];
+//			}
+//			if(((Uart3_Infor.RxNum==0)||(Uart3_Infor.RxNum>U3_RxMaxSize)||(Uart3_Infor.RxCnt>Uart3_Infor.RxNum))&&(Uart3_Infor.RxCnt>2))
+//			{
+//				Uart3_Infor.RxCnt = 0;
+//				Uart3_Infor.RxNum = 0;
+//				Uart3_Infor.RxState=0;
+//				return ;
+//			}
+//			else if((Uart3_Infor.RxCnt == Uart3_Infor.RxNum)&&(Uart3_Infor.RxBuf[Uart3_Infor.RxBuf[1]-1]==0xaa))
+//			{
+//				if(XOR_Check(Uart3_Infor.RxBuf,Uart3_Infor.RxBuf[1]-2)!=Uart3_Infor.RxBuf[Uart3_Infor.RxBuf[1]-2])
+//				{
+//					Uart3_Infor.RxCnt = 0;
+//					Uart3_Infor.RxNum = 0;
+//					Uart3_Infor.RxState=0;
+//					return ;
+//				}
+//				Uart3_Infor.RxState=U3_Rx_OK;  //注意在处理完数据后
+//				if(Uart3_Infor.RxBuf[2]==0x01)  //运行
+//				{
+//					if(Uart3_Infor.RxBuf[3]==0x03)  //回应上电检测
+//					{
+//						BlanceVersion[0]=Uart3_Infor.RxBuf[4];  //anlingna   16.11.16
+//						BlanceVersion[1]=Uart3_Infor.RxBuf[5]; //anlingna   16.11.16
+//						BlanceVersion[2]=Uart3_Infor.RxBuf[6]; //anlingna   16.11.16
+//						BlanceVersion[3]=Uart3_Infor.RxBuf[7]; //anlingna   16.11.16
+//
+//						for(i=0;i<3;i++) Balance_Infor.pid_ap[i] = Uart3_Infor.RxBuf[i+8];
+//						for(i=0;i<3;i++) Balance_Infor.pid_sp[i] = Uart3_Infor.RxBuf[i+11];
+//						for(i=0;i<2;i++) Balance_Infor.pid_ad[i] = Uart3_Infor.RxBuf[i+14];
+//						for(i=0;i<2;i++) Balance_Infor.pid_si[i] = Uart3_Infor.RxBuf[i+16];
+//						for(i=0;i<2;i++) Balance_Infor.pid_angle[i] = Uart3_Infor.RxBuf[i+18];
+//						Balance_Infor.pid_speed = Uart3_Infor.RxBuf[20];
+//
+//						Balance_Infor.PhyConState = YES;
+//					}
+//					else if(Uart3_Infor.RxBuf[3]==0x04)
+//					{
+//						if(Uart3_Infor.RxBuf[4]==0x00)  Card_Infor.robot_angle_flag=0;
+//					}
+//					else if(Uart3_Infor.RxBuf[3]==0x33)   //boot回应上电检测   王红彬新加  20160422
+//					{
+//						SY_Infor.FileObj = FileObj_Balance;
+//						SY_Infor.UpdataStat = UpdataStat_DataFail;    //王红彬   20160528
+//						Balance_Infor.PhyConState = YES;
+//					}
+//					else if(Uart3_Infor.RxBuf[3]==0x07) //回应状态
+//					{
+//						Balance_Infor.RxRunRespond = YES;
+//						Balance_Infor.RunSpeedA = Uart3_Infor.RxBuf[6]*256+Uart3_Infor.RxBuf[4];
+//						Balance_Infor.RunSpeedB = Uart3_Infor.RxBuf[7]*256+Uart3_Infor.RxBuf[5];
+//						Balance_Infor.MotorA_Type = Uart3_Infor.RxBuf[9];
+//						Balance_Infor.MotorB_Type = Uart3_Infor.RxBuf[10];
+//
+//						if(Uart3_Infor.RxBuf[8]==0x01)    //赵晓松20161013
+//							afterpulse_state = 0x01;
+//						if(Uart3_Infor.RxBuf[8]==0x00)
+//							afterpulse_state = 0x00;
+//					}
+//					else if(Uart3_Infor.RxBuf[3]==0x09) //张扬帆20160928
+//					{
+//						Card_Infor.motor_angle_flag &=~Uart3_Infor.RxBuf[5];
+//						motor_wait_finish=1;
+//						if(Balance_Infor.MotorWaitFlg==0xF0) Balance_Infor.MotorWaitFlg = Uart3_Infor.RxBuf[5];
+//					}
+//					else if(Uart3_Infor.RxBuf[3]==0x0B)
+//					{
+//						if(Uart3_Infor.RxBuf[4]==0x01)
+//						{
+//							axis.who_flag = Uart3_Infor.RxBuf[5];
+//							tmp_dat = (int32_t)((Uart3_Infor.RxBuf[6]<<24)|(Uart3_Infor.RxBuf[7]<<16)|(Uart3_Infor.RxBuf[8]<<8)|Uart3_Infor.RxBuf[9]);
+//							switch(axis.who_flag)
+//							{
+//							case 0x01:axis.speed_X = tmp_dat*0.001;break;
+//							case 0x02:axis.speed_Y = tmp_dat*0.001;break;
+//							case 0x03:axis.speed_Z = tmp_dat*0.001;break;
+//							case 0x04:axis.angular_X = tmp_dat*0.001;break;
+//							case 0x05:axis.angular_Y = tmp_dat*0.001;break;
+//							case 0x06:axis.angular_Z = tmp_dat*0.001;break;
+//							case 0x07:axis.slipAngle = (int32_t)(tmp_dat*0.001);break;
+//							case 0x08:axis.motor_angle[0] = (int32_t)(tmp_dat*0.01);break;
+//							case 0x09:axis.motor_angle[1] = (int32_t)(tmp_dat*0.01);break;
+//							}
+//							axis.cmd_flag |= 0x01;
+//						}
+//					}
+//				}
+//				else if(Uart3_Infor.RxBuf[2]==0x02)  //更新
+//				{
+//					if(Uart3_Infor.RxBuf[3]==0x06)
+//					{
+//						SY_Infor.UpdataStat = Uart3_Infor.RxBuf[4];   //结果状态    王红彬新加
+//					}
+//				}
+//				else if(Uart3_Infor.RxBuf[2]==0x04)
+//				{
+//					if(Uart3_Infor.RxBuf[3]==0x02)
+//					{
+//						Calibration_Infor.Result = Uart3_Infor.RxBuf[4];
+//						Balance_Infor.CmdFlag |= RX_CMD_BACK_AXIS;
+//					}
+//					else if(Uart3_Infor.RxBuf[3]==0x07) Balance_Infor.CmdFlag|=RX_CMD_PID_FLASH;
+//					else if(Uart3_Infor.RxBuf[3]==0x08) Balance_Infor.CmdFlag|=RX_CMD_PID_FLASH;
+//				}
+//				else if(Uart3_Infor.RxBuf[2]==0x05)
+//				{
+//					if(Uart3_Infor.RxBuf[3]==0x04)
+//					{
+//						if(Uart3_Infor.RxBuf[4]==0x02)
+//						{
+//							TricolourLED(Uart3_Infor.RxBuf[5],Uart3_Infor.RxBuf[6],Uart3_Infor.RxBuf[7]);
+//						}else
+//						if(Uart3_Infor.RxBuf[4]==0x03)
+//						{
+//							motor_state=Uart3_Infor.RxBuf[5];
+//						}
+//						else if(Uart3_Infor.RxBuf[4]==0x05)    //王红彬  20160725
+//						{
+//							SY_Infor.BalanceState = Uart3_Infor.RxBuf[5];
+//							Uart3_Infor.GyroscopeRxState = 1;  //张扬帆20160819
+//						}
+//					}
+//				}
+//				Uart3_Infor.RxCnt = 0;
+//				Uart3_Infor.RxNum = 0;
+//				Uart3_Infor.RxState=U3_Rx_OK;  //注意在处理完数据后 Uart1_Infor.RxState=U1_Rx_OK;
+//			}
+//		}
+//		else if(Uart3_Infor.RxBuf[0] == 0x56)
+//		{
+//			if((Uart3_Infor.RxCnt == 12)&&(Uart3_Infor.RxBuf[11]==0xaa))
+//			{
+//				if(XOR_Check(Uart3_Infor.RxBuf,10)!=Uart3_Infor.RxBuf[10])
+//				{
+//					Uart3_Infor.RxCnt = 0;
+//					Uart3_Infor.RxNum = 0;
+//					Uart3_Infor.RxState=0;
+//					return ;
+//				}
+//				Uart3_Infor.RxCnt = 0;
+//				Uart3_Infor.RxState=U3_Rx_OK;  //注意在处理完数据后
+//				LineTest_Infor.Type = Uart3_Infor.RxBuf[1];
+//				if(Uart3_Infor.RxBuf[1]==0x01)
+//				{
+//					LineTest_Infor.SysCommand = Uart3_Infor.RxBuf[2];
+//					if(Uart3_Infor.RxBuf[2]==0x01)   //added by Jundong
+//					{
+//						 LineTest_Infor.Full_Flag = LineTestType_Full;
+//					}
+//				}
+//				else if(Uart3_Infor.RxBuf[1]==0xF1)    //added by Jundong
+//				{
+//					LineTest_Infor.Full_Flag = Uart3_Infor.RxBuf[2];
+//					SY_Infor.SysMode = LINE_CHECK;
+//				}
+
+//			}
+//			if(Uart3_Infor.RxCnt > 12)
+//			{
+//				Uart3_Infor.RxCnt = 0;
+//				Uart3_Infor.RxNum = 0;
+//				Uart3_Infor.RxState=0;
+//			}
+//		}
+//		else if(Uart3_Infor.RxBuf[0] == 0x57)
+//		{
+//			if((Uart3_Infor.RxCnt == 12)&&(Uart3_Infor.RxBuf[11]==0xaa))
+//			{
+//				if(XOR_Check(Uart3_Infor.RxBuf,10)!=Uart3_Infor.RxBuf[10])
+//				{
+//					Uart3_Infor.RxCnt = 0;
+//					Uart3_Infor.RxNum = 0;
+//					Uart3_Infor.RxState=0;
+//					return ;
+//				}
+//				Uart3_Infor.RxCnt = 0;
+//				Uart3_Infor.RxState=U3_Rx_OK;  //注意在处理完数据后
+//				LineTest_Infor.Respond_Flag = Half;
+//			}
+//			if(Uart3_Infor.RxCnt > 12)
+//			{
+//				Uart3_Infor.RxCnt = 0;
+//				Uart3_Infor.RxNum = 0;
+//				Uart3_Infor.RxState=0;
+//			}
+//		}
+//#ifdef WIRED
+//		else if(Uart3_Infor.RxBuf[0] == 0x50)
+//		{
+//			if(Uart3_Infor.RxCnt==0x02 && Uart3_Infor.RxBuf[1]!=0x03)
+//			{
+//				Uart3_Infor.RxCnt = 0;
+//				Uart3_Infor.RxNum = 0;
+//				return ;
+//			}
+//			if(Uart3_Infor.RxCnt==0x03)
+//			{
+//				Uart3_Infor.RxNum = Uart3_Infor.RxBuf[2];
+//			}
+
+//			if(((Uart3_Infor.RxNum==0)||(Uart3_Infor.RxNum>U3_RxMaxSize)||(Uart3_Infor.RxCnt>Uart3_Infor.RxNum))&&(Uart3_Infor.RxCnt>2))
+//			{
+//				Uart3_Infor.RxCnt = 0;
+//				Uart3_Infor.RxNum = 0;
+//				return ;
+//			}
+//			else if(Uart3_Infor.RxCnt == Uart3_Infor.RxNum)
+//			{
+//				Uart3_Infor.RxCnt = 0;
+//				if(XOR_Check(Uart3_Infor.RxBuf,Uart3_Infor.RxNum)!=0)
+//				{
+//					return ;
+//				}
+//				if(memcmp(wire.src_id,&Uart3_Infor.RxBuf[4],5)==0 && Uart3_Infor.RxBuf[15]==0x00)
+//				{
+//					wire.cmd_flag |= WIRED_CMD_ACK_FLAG;
+//				}
+//				if(memcmp(wire.src_id,&Uart3_Infor.RxBuf[4],5)==0 && Uart3_Infor.RxBuf[15]==0x01)
+//				{
+//					if(Uart3_Infor.RxBuf[17]==0x01)
+//					{
+//						wire.cmd_flag |= WIRED_CMD_DEL_OK_FLAG;
+//					}else
+//					if(Uart3_Infor.RxBuf[17]==0x03)
+//					{
+//						for(i=0;i<wrb_index;i++)
+//						{
+//							if(  Uart3_Infor.RxBuf[19]==wire_reg_buf[i][0] && ((Uart3_Infor.RxBuf[9]<<8)|Uart3_Infor.RxBuf[10])==wire_reg_buf[i][1] &&
+//								 ((Uart3_Infor.RxBuf[11]<<8)|Uart3_Infor.RxBuf[12])==wire_reg_buf[i][2] && Uart3_Infor.RxBuf[13]==wire_reg_buf[i][3])
+//							{
+//								break;
+//							}
+//						}
+//						if(i==wrb_index)
+//						{
+//							wire_reg_buf[i][0] = Uart3_Infor.RxBuf[19];
+//							wire_reg_buf[i][1] = (Uart3_Infor.RxBuf[9]<<8)+Uart3_Infor.RxBuf[10];
+//							wire_reg_buf[i][2] = (Uart3_Infor.RxBuf[11]<<8)+Uart3_Infor.RxBuf[12];
+//							wire_reg_buf[i][3] = Uart3_Infor.RxBuf[13];
+//							wire_reg_buf[i][4] = Uart3_Infor.RxBuf[18];	//端口号
+//							wire_reg_buf[i][5] = (Uart3_Infor.RxBuf[20]<<8)+Uart3_Infor.RxBuf[21];
+//							wire_reg_buf[i][6] = (Uart3_Infor.RxBuf[22]<<8)+Uart3_Infor.RxBuf[23];
+//							wire_reg_buf[i][7] = SENSORSTATE_ACTIVE;
+//							wire_reg_buf[i][8] = SENSOR_CLASS_WIRED;//SENSOR_CLASS_PHYSICS;	//张扬帆 测试 SENSOR_CLASS_WIRED
+//							wrb_index++;
+//						}
+//					  wire.cmd_data[0] = i;
+//						wire.cmd_flag |= WIRED_CMD_RXDATA_FLAG;
+//					}
+//				}else
+//				if(memcmp(wire.src_id,&Uart3_Infor.RxBuf[4],5)==0 && Uart3_Infor.RxBuf[15]==0x02)
+//				{
+//					if(Uart3_Infor.RxBuf[17]==0x02)
+//					{
+//						memcpy(wire.cmd_data,Uart3_Infor.RxBuf,Uart3_Infor.RxNum*sizeof(uint8_t));
+//						wire.cmd_flag |= WIRED_CMD_RXDATA_FLAG;
+//					}
+//				}else
+//				if(memcmp(wire.src_id,&Uart3_Infor.RxBuf[4],5)==0 && Uart3_Infor.RxBuf[15]==0x03)
+//				{
+//					memcpy(wire.cmd_data,Uart3_Infor.RxBuf,Uart3_Infor.RxNum*sizeof(uint8_t));
+//					if(Uart3_Infor.RxBuf[17]==0x02)
+//					{
+//						wire.cmd_flag |= WIRED_CMD_RXDATA_FLAG;
+//					}else
+//					if(Uart3_Infor.RxBuf[17]==0x04)
+//					{
+//						wire.cmd_flag |= WIRED_CMD_UP_START_ACK;
+//					}else
+//					if(Uart3_Infor.RxBuf[17]==0x08)
+//					{
+//						wire.cmd_flag |= WIRED_CMD_UP_DATA;
+//					}else
+//					if(Uart3_Infor.RxBuf[17]==0x06)
+//					{
+//						wire.cmd_flag |= WIRED_CMD_UP_END_ACK;
+//					}
+//				}
+//			}
+//		}
+//#endif
+//		else
+//		{
+//			Uart3_Infor.RxCnt = 0;
+//			Uart3_Infor.RxNum = 0;
+//			Uart3_Infor.RxState=0;
+//		}
+//	}
+}
+
+
+
+
+/***************************************************************
+** 作者：田松召
+** 日期：2016.2.26
+** 版本：V1.0
+** 函数名: USART4_IRQHandler(void)
+** 函数功能：串口4中断服务程序，发送中断和接收中断
+** 输入参数：
+** 输出 ：1  返回值：
+	        2  改变的全局变量
+** 本函数调用的其它函数（版本号）：
+** 备注：用于线检
+** 修改日志： （作者，日期，修改内容及原因）
+***************************************************************/
+void UART4_IRQHandler(void)
+{
+//  if(USART_GetITStatus(UART4,USART_IT_TC)!=RESET)  //发送中断
+//	{
+//	  if(Uart4_Infor.TxCnt<Uart4_Infor.TxNum)
+//		{
+//			Uart4_Infor.TxCnt++;
+//		  USART_SendData(UART4,*Uart4_Infor.TxPt++);
+//		}
+//		else
+//		{
+//			Uart4_Infor.TxCnt=0;
+//		  Uart4_Infor.TxStat=U4_Tx_OK;
+//		}
+//		USART_ClearITPendingBit(UART4,USART_IT_TC);
+//	}
+//	else if(USART_GetITStatus(UART4, USART_IT_RXNE) != RESET)  //接收中断
+//	{
+//		Uart4_Infor.RxBuf[Uart4_Infor.RxCnt++] =USART_ReceiveData(UART4);
+//		if(Uart4_Infor.RxBuf[0] != 0x56)
+//		{
+//			Uart4_Infor.RxCnt = 0;
+//			USART_ClearITPendingBit(UART4,USART_IT_RXNE);
+//			return ;
+//		}
+//		if((Uart4_Infor.RxCnt == 12)&&(Uart4_Infor.RxBuf[11]==0xaa))
+//		{
+//			if(XOR_Check(Uart4_Infor.RxBuf,10)!=Uart4_Infor.RxBuf[10])
+//			{
+//				Uart4_Infor.RxCnt = 0;
+//				Uart4_Infor.RxNum = 0;
+//				Uart4_Infor.RxState=U4_Rx_ing;
+//				USART_ClearITPendingBit(UART4,USART_IT_RXNE);
+//				return ;
+//			}
+//			LineTest_Infor.Type = Uart4_Infor.RxBuf[1];
+//
+//			if(Uart4_Infor.RxBuf[1]==0x01)  //系统命令
+//			{
+//        LineTest_Infor.SysCommand = Uart4_Infor.RxBuf[2];
+//			}
+//			else if(Uart4_Infor.RxBuf[1]==0x02) //CC
+//			{
+//				 LineTest_Infor.CC_Flag = Uart4_Infor.RxBuf[2];
+//			}
+//			else if(Uart4_Infor.RxBuf[1]==0x03) //平衡
+//			{
+//				LineTest_Infor.Balance_Flag = Uart4_Infor.RxBuf[2];
+//			}
+//			else if(Uart4_Infor.RxBuf[1]==0x04) //语音
+//			{
+//        LineTest_Infor.Multimedia_Flag = Uart4_Infor.RxBuf[2];
+//			}
+//			else if(Uart4_Infor.RxBuf[1]==0x05) //Added By Jundong
+//			{
+//        Pmu_Infor.CheckLine_Flag = Uart4_Infor.RxBuf[2];
+//			}
+//			else if(Uart4_Infor.RxBuf[1]==0x06) //其它项
+//			{
+//				LineTest_Infor.Other_Flag = Uart4_Infor.RxBuf[2];
+//			}
+//      else if(Uart4_Infor.RxBuf[1]==0x08) //软件进入半制,Added By Jundong
+//			{
+//				SY_Infor.SysMode = LINE_CHECK;
+//			}
+//			Uart4_Infor.RxState=U4_Rx_OK;  //注意在处理完数据后 Uart1_Infor.RxState=U1_Rx_OK;
+//			Uart4_Infor.RxCnt = 0;
+//			Uart4_Infor.RxNum = 0;
+//		}
+//		if(Uart4_Infor.RxCnt > 12)
+//		{
+//		  Uart4_Infor.RxCnt = 0;
+//			Uart4_Infor.RxNum = 0;
+//			Uart4_Infor.RxState=U4_Rx_ing;
+//		}
+//		USART_ClearITPendingBit(UART4,USART_IT_RXNE);
+//	}
+//	USART_ClearITPendingBit(UART4,USART_IT_RXNE);
+//	USART_ClearITPendingBit(UART4,USART_IT_TC);
+}
+
+
+
+/***************************************************************
+** 作者：田松召
+** 日期：2016.3.23
+** 版本：V1.0
+** 函数名: USART5_IRQHandler(void)
+** 函数功能：串口5中断服务程序，发送中断和接收中断
+** 输入参数：
+** 输出 ：1  返回值：
+	        2  改变的全局变量
+** 本函数调用的其它函数（版本号）：
+** 备注：用于电源管理
+** 修改日志： （作者，日期，修改内容及原因）
+***************************************************************/
+void UART5_RxBufferClr(void)
+{
+  uint8_t i;
+
+  for(i=0; i<U5_RxMaxSize; i++) Uart5_Infor.RxBuf[i] = 0;
+}
+void UART5_IRQHandler(void)
+{
+//  if(USART_GetITStatus(UART5, USART_IT_RXNE) != RESET)  //接收中断
+//	{
+//		USART_ClearITPendingBit(UART5,USART_IT_RXNE);
+//		Uart5_Infor.RxBuf[Uart5_Infor.RxCnt++] =USART_ReceiveData(UART5);
+//
+//        UART5_RxBufferClr();
+//		}
+//
+//	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
